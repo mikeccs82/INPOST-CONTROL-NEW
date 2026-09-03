@@ -4,7 +4,7 @@ import { geocode } from "../lib/api";
 import { toast } from "sonner";
 
 const inputCls =
-  "w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#FF6B00] focus:border-[#FF6B00] placeholder:text-slate-500 transition-colors";
+  "w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21] focus:border-[#F26A21] placeholder:text-slate-500 transition-colors";
 
 export const AddStopPanel = ({ onAdd }) => {
   const [tab, setTab] = useState("search");
@@ -69,7 +69,7 @@ export const AddStopPanel = ({ onAdd }) => {
           data-testid="tab-search"
           onClick={() => setTab("search")}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors ${
-            tab === "search" ? "bg-[#FF6B00] text-black" : "text-slate-400 hover:text-white"
+            tab === "search" ? "bg-[#F26A21] text-black" : "text-slate-400 hover:text-white"
           }`}
         >
           <Search size={14} /> Buscar
@@ -78,7 +78,7 @@ export const AddStopPanel = ({ onAdd }) => {
           data-testid="tab-coords"
           onClick={() => setTab("coords")}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors ${
-            tab === "coords" ? "bg-[#FF6B00] text-black" : "text-slate-400 hover:text-white"
+            tab === "coords" ? "bg-[#F26A21] text-black" : "text-slate-400 hover:text-white"
           }`}
         >
           <MapPin size={14} /> Lat/Lon
@@ -97,7 +97,7 @@ export const AddStopPanel = ({ onAdd }) => {
                 onChange={(e) => runSearch(e.target.value)}
               />
               {searching && (
-                <Loader2 size={16} className="absolute right-2.5 top-2.5 animate-spin text-[#FF6B00]" />
+                <Loader2 size={16} className="absolute right-2.5 top-2.5 animate-spin text-[#F26A21]" />
               )}
             </div>
             {results.length > 0 && (
@@ -109,7 +109,7 @@ export const AddStopPanel = ({ onAdd }) => {
                     onClick={() => pickResult(r)}
                     className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white border-b border-slate-800 last:border-0 flex gap-2 transition-colors"
                   >
-                    <MapPin size={14} className="text-[#FF6B00] shrink-0 mt-0.5" />
+                    <MapPin size={14} className="text-[#F26A21] shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{r.display_name}</span>
                   </button>
                 ))}
@@ -144,7 +144,7 @@ export const AddStopPanel = ({ onAdd }) => {
             <button
               data-testid="add-manual-btn"
               onClick={addManual}
-              className="w-full flex items-center justify-center gap-2 bg-[#FF6B00] hover:bg-[#FF8533] text-black font-bold text-sm py-2 rounded-sm transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-black font-bold text-sm py-2 rounded-sm transition-colors"
             >
               <Plus size={16} /> Añadir parada
             </button>

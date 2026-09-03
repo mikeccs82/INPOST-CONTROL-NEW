@@ -24,8 +24,18 @@ export const optimizeRoute = async (payload) => {
   return data;
 };
 
-export const computeRoute = async (stops) => {
-  const { data } = await client.post("/route", { stops });
+export const computeRoute = async (stops, meta = {}) => {
+  const { data } = await client.post("/route", { stops, ...meta });
+  return data;
+};
+
+export const getSettings = async () => {
+  const { data } = await client.get("/settings");
+  return data;
+};
+
+export const saveSettings = async (payload) => {
+  const { data } = await client.put("/settings", payload);
   return data;
 };
 

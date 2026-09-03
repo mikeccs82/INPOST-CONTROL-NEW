@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 2 focused on (a) sidebar stop-list scroll fix, (b) new stop-selection info card + green/red leg coloring, and (c) regression of warehouse/service-time + per-leg backend responses. Backend: 49/49 pytest tests pass (added /app/backend/tests/test_legs.py with 4 new tests for /api/optimize legs, /api/route legs, service_duration math and /api/settings persistence). Frontend: imported /app/sample_stops.xlsx (36 stops), verified scroll container (scrollHeight 3570 > clientHeight 843, scrollTop moved 0 -> 2727, stop-item-20 reachable), verified info card content (dirección, coordenadas, ventana horaria, ID de orden), orange ring highlight on selected item, SVG strokes: 36x #F26A21 before selection -> 34x orange + 1 green #22C55E + 1 red #EF4444 after selection (both from list click and from map marker click), close-info-card reverts to 36 orange. Warehouse flow: geocode search -> save -> reload persists start + 4 min service time; optimize shows KPI Tiempo 3h 28m with 'Conducción 1h 4m + 2h 24m en paradas', leg count 37 (36 stops + return) with correct green/red offset when warehouse start is present. No blocking issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Map / stop selection", "issues": ["Clicking a map marker opens BOTH the Leaflet Popup and the new floating StopInfoCard, duplicating the same data on screen (see screenshot selected_map). Consider removing the Popup now that the info card exists.", "StopInfoCard is anchored top-left over the map and sits next to the Leaflet zoom controls; on smaller viewports it may cover the +/- buttons."]},
+      {"screen": "Warehouse panel", "issues": ["Nominatim suggestion dropdown overlays the 'Guardar configuración' button while open (expected overlay, but the button is unclickable until a suggestion is picked or input cleared - no explicit dismiss/blur handler)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_legs.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_warehouse.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/legs_results.xml"
+  ],
+  "action_items": [
+    "Optional: remove duplicate Leaflet Popup on stop markers since StopInfoCard now shows full info.",
+    "Optional: close the geocode suggestion list on outside click/blur so wh-save-btn is not intercepted."
+  ],
+  "critical_code_review_comments": [
+    "MapView leg index math ((start?1:0)+i) is correct for start-only and round-trip cases; note that when an explicit 'end' warehouse exists the last stop's outgoing leg still maps correctly, but this combination was not exercised in the UI (only backend-level).",
+    "osrm_route stitches per-step geometry; if OSRM ever omits 'steps', legs would be empty and MapView silently falls back to the single orange line - acceptable, but consider a fallback using route legs' own geometry."
+  ],
+  "updated_files": ["/app/backend/tests/test_legs.py", "/app/test_reports/iteration_2.json"],
+  "success_rate": {"backend": "100% (49/49)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Temporarily wrote /api/settings (warehouse start + service_time_min=4) during testing; reset to null/0 afterwards.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend suite: /app/backend/tests (backend_test.py, test_warehouse.py, test_legs.py) - run `cd /app/backend && python -m pytest tests/ -q`. For frontend leg-color verification, count SVG stroke attributes under .leaflet-overlay-pane svg path (#F26A21 orange, #22C55E green, #EF4444 red) instead of relying on screenshots; stops are densely clustered. Scroll container = nearest ancestor of [data-testid=stop-list] with class containing overflow-y-auto. Warehouse geocode search requires clicking [data-testid=wh-start-result-0] before wh-save-btn is clickable.",
+  "rca_of_the_issue": "N/A - all reported fixes/features verified working."
+}

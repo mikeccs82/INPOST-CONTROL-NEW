@@ -80,8 +80,8 @@ body {
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    background: #FF6B00;
-    color: #000;
+    background: #F26A21;
+    color: #fff;
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 700;
     font-size: 13px;
@@ -94,6 +94,20 @@ body {
     color: #04231a;
     width: 34px;
     height: 34px;
+}
+.end-marker {
+    border-radius: 6px;
+    background: #38BDF8;
+    color: #052436;
+    width: 34px;
+    height: 34px;
+}
+
+.marker-selected {
+    outline: 3px solid #fde047;
+    outline-offset: 2px;
+    transform: scale(1.15);
+    z-index: 1000;
 }
 
 .font-mono-tech { font-family: 'IBM Plex Mono', monospace; }

@@ -43,7 +43,7 @@ export const SavedRoutesDialog = ({ open, onClose, onLoad }) => {
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <h3 className="font-head text-lg font-bold text-white flex items-center gap-2">
-            <FolderOpen size={20} className="text-[#FF6B00]" /> Rutas guardadas
+            <FolderOpen size={20} className="text-[#F26A21]" /> Rutas guardadas
           </h3>
           <button onClick={onClose} data-testid="close-saved-dialog" className="text-slate-400 hover:text-white">
             <X size={20} />
@@ -72,7 +72,7 @@ export const SavedRoutesDialog = ({ open, onClose, onLoad }) => {
                   <button
                     data-testid={`load-route-${r.id}`}
                     onClick={() => onLoad(r)}
-                    className="bg-[#FF6B00] hover:bg-[#FF8533] text-black text-xs font-bold px-3 py-1.5 rounded-sm transition-colors"
+                    className="bg-[#F26A21] hover:bg-[#f58220] text-black text-xs font-bold px-3 py-1.5 rounded-sm transition-colors"
                   >
                     Cargar
                   </button>

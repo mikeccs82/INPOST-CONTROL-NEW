@@ -129,8 +129,16 @@ class TestRoute:
         assert len(d["geometry"]) > 2
 
     def test_route_min_two_stops(self, api_client, sample_stops):
-        r = api_client.post(f"{API}/route", json={"stops": sample_stops[:1]}, timeout=60)
+        # Open path with a single stop still needs >=2 points -> 400
+        r = api_client.post(f"{API}/route", json={"stops": sample_stops[:1], "round_trip": False}, timeout=60)
         assert r.status_code == 400
+
+    def test_route_single_stop_round_trip_degenerate(self, api_client, sample_stops):
+        # NOTE (behaviour change with the warehouse feature): a single stop with round_trip=True
+        # is treated as stop -> stop and returns a zero-length route instead of a 400.
+        r = _retry(lambda: api_client.post(f"{API}/route", json={"stops": sample_stops[:1]}, timeout=60))
+        assert r.status_code == 200, r.text[:300]
+        assert r.json()["summary"]["distance"] == 0
 
 
 # ------------------------- Excel import -------------------------

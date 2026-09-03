@@ -50,15 +50,40 @@ class Stop(BaseModel):
     email: Optional[str] = None
 
 
+class Waypoint(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = ""
+    address: str = ""
+    lat: float
+    lon: float
+
+
 class OptimizeRequest(BaseModel):
     stops: List[Stop]
     depot_index: int = 0
     metric: str = "duration"  # 'duration' (fastest) or 'distance' (shortest)
     round_trip: bool = True
+    start: Optional[Waypoint] = None  # warehouse departure
+    end: Optional[Waypoint] = None    # warehouse arrival (if different)
+    service_time_min: float = 0       # minutes spent at each stop
 
 
 class RouteRequest(BaseModel):
     stops: List[Stop]  # already ordered
+    start: Optional[Waypoint] = None
+    end: Optional[Waypoint] = None
+    round_trip: bool = True
+    service_time_min: float = 0
+
+
+class Settings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    start: Optional[Waypoint] = None
+    end: Optional[Waypoint] = None
+    same_as_start: bool = True
+    service_time_min: float = 0
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class SavedRouteCreate(BaseModel):
@@ -67,6 +92,9 @@ class SavedRouteCreate(BaseModel):
     metric: str = "duration"
     round_trip: bool = True
     depot_index: int = 0
+    start: Optional[Waypoint] = None
+    end: Optional[Waypoint] = None
+    service_time_min: float = 0
 
 
 class SavedRoute(BaseModel):
@@ -77,6 +105,9 @@ class SavedRoute(BaseModel):
     metric: str = "duration"
     round_trip: bool = True
     depot_index: int = 0
+    start: Optional[Dict[str, Any]] = None
+    end: Optional[Dict[str, Any]] = None
+    service_time_min: float = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -100,7 +131,7 @@ async def osrm_table(stops: List[Stop]):
 
 async def osrm_route(stops: List[Stop]):
     coords = _coords_str(stops)
-    url = f"{OSRM}/route/v1/driving/{coords}?overview=full&geometries=geojson"
+    url = f"{OSRM}/route/v1/driving/{coords}?overview=full&geometries=geojson&steps=true"
     async with httpx.AsyncClient(timeout=30, headers={"User-Agent": UA}) as c:
         r = await c.get(url)
         r.raise_for_status()
@@ -108,82 +139,100 @@ async def osrm_route(stops: List[Stop]):
     if data.get("code") != "Ok" or not data.get("routes"):
         raise HTTPException(502, f"OSRM route error: {data.get('code')}")
     route = data["routes"][0]
+    legs = []
+    for leg in route.get("legs", []):
+        coords_leg = []
+        for step in leg.get("steps", []):
+            g = step.get("geometry", {}).get("coordinates", [])
+            if coords_leg and g and coords_leg[-1] == g[0]:
+                coords_leg.extend(g[1:])
+            else:
+                coords_leg.extend(g)
+        legs.append(coords_leg)
     return {
         "geometry": route["geometry"]["coordinates"],  # [lon,lat] pairs
         "distance": route["distance"],  # meters
         "duration": route["duration"],  # seconds
+        "legs": legs,  # per-leg [lon,lat] coordinate arrays
     }
 
 
-def nearest_neighbor(matrix, start, n):
-    unvisited = set(range(n))
-    unvisited.discard(start)
-    order = [start]
-    cur = start
-    while unvisited:
-        nxt = min(unvisited, key=lambda j: matrix[cur][j] if matrix[cur][j] is not None else math.inf)
-        order.append(nxt)
-        unvisited.discard(nxt)
-        cur = nxt
-    return order
-
-
-def route_cost(order, matrix, round_trip):
+def path_cost(order, matrix, close):
     total = 0.0
     for i in range(len(order) - 1):
         v = matrix[order[i]][order[i + 1]]
         total += v if v is not None else 1e9
-    if round_trip and len(order) > 1:
+    if close and len(order) > 1:
         v = matrix[order[-1]][order[0]]
         total += v if v is not None else 1e9
     return total
 
 
-def two_opt(order, matrix, round_trip):
-    # Keep first node (depot) fixed
+def nn_path(matrix, start, interior):
+    order = [start]
+    cur = start
+    unv = set(interior)
+    while unv:
+        nxt = min(unv, key=lambda j: matrix[cur][j] if matrix[cur][j] is not None else math.inf)
+        order.append(nxt)
+        unv.discard(nxt)
+        cur = nxt
+    return order
+
+
+def two_opt_path(order, matrix, close, last_fixed):
     best = order[:]
-    best_cost = route_cost(best, matrix, round_trip)
+    best_cost = path_cost(best, matrix, close)
+    hi = len(best) - 2 if last_fixed else len(best) - 1
     improved = True
     while improved:
         improved = False
-        for i in range(1, len(best) - 1):
-            for k in range(i + 1, len(best)):
-                new_order = best[:i] + best[i:k + 1][::-1] + best[k + 1:]
-                c = route_cost(new_order, matrix, round_trip)
+        for i in range(1, hi + 1):
+            for k in range(i + 1, hi + 1):
+                cand = best[:i] + best[i:k + 1][::-1] + best[k + 1:]
+                c = path_cost(cand, matrix, close)
                 if c + 1e-6 < best_cost:
-                    best, best_cost = new_order, c
+                    best, best_cost = cand, c
                     improved = True
     return best
 
 
-def or_opt(order, matrix, round_trip):
-    # Move segments of length 1..3 to a better position (depot stays first)
+def or_opt_path(order, matrix, close, last_fixed):
     best = order[:]
-    best_cost = route_cost(best, matrix, round_trip)
+    best_cost = path_cost(best, matrix, close)
     improved = True
     while improved:
         improved = False
         for seg in (1, 2, 3):
-            for i in range(1, len(best) - seg + 1):
+            hi = len(best) - 1 - seg if last_fixed else len(best) - seg
+            for i in range(1, hi + 1):
                 segment = best[i:i + seg]
                 rest = best[:i] + best[i + seg:]
-                for j in range(1, len(rest) + 1):
+                max_j = len(rest) - 1 if last_fixed else len(rest)
+                for j in range(1, max_j + 1):
                     if j == i:
                         continue
                     cand = rest[:j] + segment + rest[j:]
-                    c = route_cost(cand, matrix, round_trip)
+                    c = path_cost(cand, matrix, close)
                     if c + 1e-6 < best_cost:
                         best, best_cost = cand, c
                         improved = True
     return best
 
 
-def solve(matrix, depot, n, round_trip):
-    order = nearest_neighbor(matrix, depot, n)
-    order = two_opt(order, matrix, round_trip)
-    order = or_opt(order, matrix, round_trip)
-    order = two_opt(order, matrix, round_trip)
-    return order
+def solve_path(matrix, n, start, end, round_trip):
+    if end is not None:
+        interior = [i for i in range(n) if i != start and i != end]
+        order = nn_path(matrix, start, interior) + [end]
+        close, last_fixed = False, True
+    else:
+        interior = [i for i in range(n) if i != start]
+        order = nn_path(matrix, start, interior)
+        close, last_fixed = round_trip, False
+    order = two_opt_path(order, matrix, close, last_fixed)
+    order = or_opt_path(order, matrix, close, last_fixed)
+    order = two_opt_path(order, matrix, close, last_fixed)
+    return order, close
 
 
 # --------------------------- Routes -------------------------------
@@ -306,48 +355,128 @@ async def import_excel(file: UploadFile = File(...)):
 
 @api_router.post("/route")
 async def compute_route(req: RouteRequest):
-    if len(req.stops) < 2:
-        raise HTTPException(400, "Se necesitan al menos 2 paradas")
-    result = await osrm_route(req.stops)
-    return {"order": [s.id for s in req.stops], "summary": {"distance": result["distance"], "duration": result["duration"]}, "geometry": result["geometry"]}
+    nodes = []
+    if req.start is not None:
+        nodes.append(req.start)
+    nodes += list(req.stops)
+    if req.end is not None:
+        nodes.append(req.end)
+
+    return_to = None
+    if req.end is None and req.round_trip:
+        return_to = req.start if req.start is not None else (req.stops[0] if req.stops else None)
+
+    geo_nodes = nodes[:]
+    if return_to is not None:
+        geo_nodes = nodes + [return_to]
+
+    if len(geo_nodes) < 2:
+        raise HTTPException(400, "Se necesitan al menos 2 puntos")
+
+    result = await osrm_route(geo_nodes)
+    service = req.service_time_min * 60 * len(req.stops)
+    return {
+        "order": [s.id for s in req.stops],
+        "summary": {
+            "distance": result["distance"],
+            "duration": result["duration"] + service,
+            "drive_duration": result["duration"],
+            "service_duration": service,
+            "stops": len(req.stops),
+        },
+        "geometry": result["geometry"],
+        "legs": result["legs"],
+    }
 
 
 @api_router.post("/optimize")
 async def optimize(req: OptimizeRequest):
-    n = len(req.stops)
-    if n < 2:
-        raise HTTPException(400, "Se necesitan al menos 2 paradas para optimizar")
+    n_stops = len(req.stops)
 
-    durations, distances = await osrm_table(req.stops)
+    if req.start is not None:
+        nodes = [req.start] + list(req.stops)
+        start_idx = 0
+        stop_index_set = set(range(1, 1 + n_stops))
+        end_idx = None
+        if req.end is not None:
+            nodes = nodes + [req.end]
+            end_idx = len(nodes) - 1
+    else:
+        if n_stops < 2:
+            raise HTTPException(400, "Se necesitan al menos 2 paradas para optimizar")
+        nodes = list(req.stops)
+        start_idx = req.depot_index if 0 <= req.depot_index < n_stops else 0
+        stop_index_set = set(range(n_stops))
+        end_idx = None
+
+    N = len(nodes)
+    if N < 2:
+        raise HTTPException(400, "Se necesitan al menos 2 puntos para optimizar")
+
+    durations, distances = await osrm_table(nodes)
     matrix = distances if req.metric == "distance" else durations
     other = durations if req.metric == "distance" else distances
 
-    depot = req.depot_index if 0 <= req.depot_index < n else 0
-    # Solve for the chosen metric AND the other metric, then keep whichever
-    # tour is best under the selected objective (guarantees 'fastest' is never
-    # worse than 'shortest' and vice-versa).
-    cand_main = solve(matrix, depot, n, req.round_trip)
-    cand_other = solve(other, depot, n, req.round_trip)
-    order = min([cand_main, cand_other], key=lambda o: route_cost(o, matrix, req.round_trip))
+    # Solve for the chosen metric AND the other metric, keep the best under the
+    # selected objective (guarantees 'fastest' is never worse than 'shortest').
+    order_main, close = solve_path(matrix, N, start_idx, end_idx, req.round_trip)
+    order_other, _ = solve_path(other, N, start_idx, end_idx, req.round_trip)
+    order = min([order_main, order_other], key=lambda o: path_cost(o, matrix, close))
 
-    ordered_stops = [req.stops[i] for i in order]
-    if req.round_trip:
-        ordered_stops = ordered_stops + [req.stops[order[0]]]
+    geo_nodes = [nodes[i] for i in order]
+    if close:
+        geo_nodes = geo_nodes + [nodes[start_idx]]
 
-    result = await osrm_route(ordered_stops)
-    # ordered stop ids without duplicate return marker
-    stop_order = [req.stops[i].id for i in order]
+    result = await osrm_route(geo_nodes)
+    stop_order = [nodes[i].id for i in order if i in stop_index_set]
+
+    service = req.service_time_min * 60 * n_stops
     return {
         "order": stop_order,
-        "round_trip": req.round_trip,
-        "summary": {"distance": result["distance"], "duration": result["duration"], "stops": n},
+        "round_trip": close,
+        "summary": {
+            "distance": result["distance"],
+            "duration": result["duration"] + service,
+            "drive_duration": result["duration"],
+            "service_duration": service,
+            "stops": n_stops,
+        },
         "geometry": result["geometry"],
+        "legs": result["legs"],
     }
+
+
+@api_router.get("/settings")
+async def get_settings():
+    doc = await db.settings.find_one({"id": "default"}, {"_id": 0})
+    if not doc:
+        base = Settings().model_dump()
+        base["id"] = "default"
+        return base
+    return doc
+
+
+@api_router.put("/settings")
+async def put_settings(body: Settings):
+    doc = body.model_dump()
+    doc["id"] = "default"
+    doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.settings.update_one({"id": "default"}, {"$set": doc}, upsert=True)
+    return doc
 
 
 @api_router.post("/routes", response_model=SavedRoute)
 async def save_route(body: SavedRouteCreate):
-    doc = SavedRoute(name=body.name, stops=[s.model_dump() for s in body.stops], metric=body.metric, round_trip=body.round_trip, depot_index=body.depot_index)
+    doc = SavedRoute(
+        name=body.name,
+        stops=[s.model_dump() for s in body.stops],
+        metric=body.metric,
+        round_trip=body.round_trip,
+        depot_index=body.depot_index,
+        start=body.start.model_dump() if body.start else None,
+        end=body.end.model_dump() if body.end else None,
+        service_time_min=body.service_time_min,
+    )
     await db.routes.insert_one(doc.model_dump())
     return doc
 
@@ -377,6 +506,9 @@ async def update_route(route_id: str, body: SavedRouteCreate):
         "metric": body.metric,
         "round_trip": body.round_trip,
         "depot_index": body.depot_index,
+        "start": body.start.model_dump() if body.start else None,
+        "end": body.end.model_dump() if body.end else None,
+        "service_time_min": body.service_time_min,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.routes.update_one({"id": route_id}, {"$set": update})
