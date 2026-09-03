@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 5 targeted re-test of the iteration_4 CRITICAL duplicate-stop bug (VRPTW optimize with no warehouse start) + full backend regression + quick frontend regression. RESULT: bug is FIXED. Backend: all 73 tests in /app/backend/tests/ pass (including test_vrptw_no_depot.py which previously failed by design). Frontend: import 36 stops -> untyped modal(5) -> 'Respetar horarios' ON + salida 08:00 -> Optimizar ruta returns 36 stops (KPI Paradas=36, 36 unique stop-item testids, 36 ETA badges, ZERO console errors / no React duplicate-key warnings). Drivers CRUD (add/list/delete) works via UI + API. Editable window inputs are now readable (12h value not clipped) and editing stop-wto-1 to 08:05 triggered GET /api/route 200 and updated the schedule bar from 'Todo en horario' to '1 fuera de horario'.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/optimize (respect_windows=true, no `start`)", "issue": "Carry-over from iteration_4 (unchanged, non-blocking): solve_vrptw skips window constraints for the start node, so when there is no warehouse the first stop's ventana horaria is silently ignored. Decide expected behaviour or warn the user."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Config panel / stop rows", "issues": ["wh-departure and stop-wfrom/wto are still native browser time pickers (12h 'AM/PM' + native clock icon) inside the custom dark UI — values are now fully readable after the 96px widening, but the control style remains inconsistent with the design system (cosmetic, unchanged from iteration_4)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_vrptw_no_depot.py", "/app/backend/tests/test_drivers_windows.py", "/app/test_reports/pytest/pytest_iter5.xml"],
+  "action_items": ["No blocking action items. Optionally address the ignored first-stop time window when no warehouse start is configured, and optionally replace native time inputs with a custom 24h control."],
+  "critical_code_review_comments": [
+    "server.py optimize(): the VRPTW branch now dedupes stop_order with a seen-set (verified lines ~665-672) so both branches honour the same contract (unique ids, len == n_stops). Good.",
+    "App.js handleOptimize: `const uniqueOrder = [...new Set(data.order)]` is a solid defensive guard; note that stops dropped by the filter(Boolean) would silently shrink the list — consider logging a warning if uniqueOrder.length !== stops.length.",
+    "App.js handleImport does NOT call recalc(), so right after import Distancia/Tiempo show '—' and no schedule-bar until 'Optimizar ruta' is pressed. Intentional? (my initial test wrongly expected a route after import)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (73/73 pytest)", "frontend": "100% of retested flows (duplicate-stop fix, drivers CRUD, window edit recalc, schedule bar, ETA badges)"},
+  "seed_data_creation": "Created and deleted two temporary drivers (QAT1 Retest via UI+API DELETE, QAT2 Del via UI delete). No leftover test data. Settings currently: departure_time=null, respect_windows=true, service_by_type P=3/PD=4/L=6 (departure field renders empty on load — set it in the UI before optimizing with windows).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "No auth required",
+  "context_for_next_testing_agent": "Duplicate-stop VRPTW bug is fixed and covered by tests/test_vrptw_no_depot.py. Full suite: 73 tests, 43s, run `cd /app/backend && python -m pytest tests/ -v`. Frontend flow timings: import sample_stops.xlsx ~5s, VRPTW optimize over 36 stops ~10-15s (poll for [data-testid=schedule-bar]). Gotchas: wh-respect is a native checkbox -> use is_checked() (not data-state) and it is persisted as true, so a blind click turns it OFF; departure_time in settings is currently null so fill wh-departure with '08:00' before optimizing; drivers delete button must be located by its exact data-testid (delete-driver-{id}) — using .last was flaky once.",
+  "rca_of_the_issue": "Fixed as recommended: server.py VRPTW branch builds stop_order via a seen_ids set so the closed-tour depot stop id is emitted only once; App.js also dedupes data.order. Verified end-to-end: 3-stop no-warehouse VRPTW returns unique order len==3, and 36-stop UI run renders exactly 36 stop items with no React duplicate-key errors."
+}

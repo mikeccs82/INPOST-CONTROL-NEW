@@ -11,7 +11,7 @@ const Row = ({ icon, label, value }) =>
     </div>
   ) : null;
 
-export const StopInfoCard = ({ stop, index, total, onClose }) => {
+export const StopInfoCard = ({ stop, index, total, sched, onClose }) => {
   if (!stop) return null;
   return (
     <div
@@ -28,10 +28,20 @@ export const StopInfoCard = ({ stop, index, total, onClose }) => {
         </button>
       </div>
       <div className="p-4 space-y-3">
+        {sched && (
+          <div className={`flex items-center justify-between rounded-md px-3 py-2 border ${sched.late ? "bg-red-500/10 border-red-500/40" : "bg-emerald-500/10 border-emerald-500/40"}`} data-testid="info-eta">
+            <span className={`flex items-center gap-1.5 text-sm font-bold ${sched.late ? "text-red-400" : "text-emerald-400"}`}>
+              <Clock size={14} /> Llegada {sched.arrival}
+            </span>
+            <span className="text-[11px] text-slate-300">
+              {sched.late ? "Fuera de horario" : sched.wait_min > 0 ? `Espera ${sched.wait_min}m` : "En horario"}
+            </span>
+          </div>
+        )}
         <Row icon={<MapPin size={15} />} label="Dirección" value={stop.address} />
         <Row icon={<Hash size={15} />} label="Coordenadas" value={`${Number(stop.lat).toFixed(6)}, ${Number(stop.lon).toFixed(6)}`} />
         {(stop.window_from || stop.window_to) && (
-          <Row icon={<Clock size={15} />} label="Ventana horaria" value={`${stop.window_from || "—"} → ${stop.window_to || "—"}`} />
+          <Row icon={<Clock size={15} />} label="Ventana horaria" value={`${(stop.window_from || "—").slice(0, 5)} → ${(stop.window_to || "—").slice(0, 5)}`} />
         )}
         <Row icon={<Phone size={15} />} label="Teléfono" value={stop.phone} />
         <Row icon={<Mail size={15} />} label="Email" value={stop.email} />

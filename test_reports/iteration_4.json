@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 4: tested new DRIVERS CRUD (backend + UI) and TIME WINDOWS/VRPTW (departure time, schedule/ETAs, late detection, editable windows) plus regression (per-type minutes, geocode resolve dialog, colored legs, sidebar scroll). Backend: 12 new tests in test_drivers_windows.py all pass + 60 existing tests pass. Frontend: drivers dialog add/edit/delete, settings persistence, ETA badges, schedule bar, window editing all work. ONE CRITICAL bug found: /api/optimize with respect_windows=true and NO warehouse start returns the depot stop TWICE in `order`, so the UI duplicates a stop (36 -> 37 stops, React duplicate-key errors, inflated KPIs).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/optimize (respect_windows=true, no `start` warehouse)",
+        "issue": "VRPTW branch builds stop_order from order_full which includes the depot node twice (start and end of the closed tour). When no warehouse start is set the depot IS one of the stops, so its id is returned twice: order = ['A','B','C','A'] for 3 stops. Frontend maps order -> stops and renders 37 items for 36 stops (React 'two children with the same key' errors, KPI Paradas=37, inflated distance/duration). Fix: dedupe (server.py line ~662) e.g. `stop_order = [nodes[i].id for i in order_full[:-1] if i in stop_index_set]` or build with a seen-set like _compute_schedule does. Reproduced by /app/backend/tests/test_vrptw_no_depot.py (currently FAILING by design).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/optimize (respect_windows=true, no `start`)",
+        "issue": "solve_vrptw skips the window constraints for the start node (`if node == start: continue`). With no warehouse the first stop is a real delivery, so its ventana horaria is silently ignored and it is forced to be visited first (observed order A(09:00-10:00) before B(08:00-08:30)). Acceptable only if the UI requires a warehouse for window optimization — otherwise the depot stop's window should be honoured or the user warned."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "App.js handleOptimize / StopList",
+        "issue": "After 'Optimizar ruta' with 'Respetar horarios' ON and no warehouse start, one stop is duplicated in the list (36 -> 37 items, KPI Paradas=37) and React logs 'Encountered two children with the same key' repeatedly. Root cause is the backend duplicate id in `order`; frontend should also guard against duplicate ids when mapping data.order.",
+        "selector": "[data-testid='kpi-paradas'], [data-testid^='stop-item-']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Stop list rows / config panel",
+        "issues": [
+          "The per-stop window inputs (stop-wfrom-{i}/stop-wto-{i}, width 74px) are native <input type=time> rendered in 12h locale, so the value is clipped ('08:00 ,' / '01:15 |') and the AM/PM part is unreadable — widen to ~96px or force 24h display.",
+          "wh-departure is also a native time picker showing '08:00 AM' (browser default control) inside an otherwise custom dark UI — inconsistent with the rest of the design system."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_drivers_windows.py",
+    "/app/backend/tests/test_vrptw_no_depot.py",
+    "/app/test_reports/pytest/pytest_drivers_windows.xml",
+    "/app/test_reports/pytest/pytest_regression.xml"
+  ],
+  "action_items": [
+    "CRITICAL: dedupe stop_order in the VRPTW branch of /api/optimize (server.py ~line 662) so the depot stop is not returned twice when no warehouse start is configured; re-run /app/backend/tests/test_vrptw_no_depot.py until it passes.",
+    "Optionally guard handleOptimize in App.js against duplicate ids returned by the API.",
+    "Decide whether the first stop's time window should be respected when no warehouse start exists (currently ignored).",
+    "Widen the stop window time inputs so the 12h AM/PM value is not clipped."
+  ],
+  "critical_code_review_comments": [
+    "server.py optimize(): the VRPTW branch derives stop_order from the full node tour (which repeats the start node) while the heuristic branch does not — the two branches must produce the same contract (unique stop ids, len == n_stops).",
+    "server.py solve_vrptw(): late detection relies on SetCumulVarSoftUpperBound with a fixed penalty=30 s/second; fine, but the *reported* late flag comes from _compute_schedule recomputed with real OSRM leg durations, so a stop can be reported late even though the solver considered it on time — acceptable but worth documenting.",
+    "_compute_schedule assumes leg_durations align 1:1 with geo_nodes; if OSRM ever returns fewer legs it silently adds 0 — consider raising instead."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_drivers_windows.py",
+    "/app/backend/tests/test_vrptw_no_depot.py"
+  ],
+  "success_rate": {"backend": "98% (72/73 assertions; 1 intentional failing regression test exposing the duplicate-order bug)", "frontend": "90% (all flows work except duplicated stop after window optimization)"},
+  "seed_data_creation": "Created and deleted TEST_ drivers via API and a 'QAJuan Lopez' driver via UI (deleted at end). Settings were written (departure_time 08:00, respect_windows true, service_by_type P=7,PD=4,L=6) and left in place.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "No auth required",
+  "context_for_next_testing_agent": "Backend suites: tests/backend_test.py, test_legs.py, test_warehouse.py, test_types_geocode.py (60 pass), test_drivers_windows.py (12 pass: drivers CRUD, VRPTW order B->A->C, late detection, /api/route schedule, settings persistence), test_vrptw_no_depot.py (FAILS until the duplicate stop_order bug is fixed). Frontend verified: drivers dialog CRUD, wh-departure/wh-respect persistence after reload, untyped modal + 36-stop import, schedule-bar 'Salida 08:00 -> Fin 13:43', stop-eta-{i} badges, info-eta, editable stop-wfrom/wto triggering /api/route recalc (end time changed 13:43 -> 17:25, late_count 7), geocode resolve dialog (2 pending), per-type minutes (P=7 -> '7m'), green #22C55E + red #EF4444 legs on stop selection, sidebar scroll (scrollHeight 5225 vs client 813). Note: optimize with windows over 36 stops takes ~10s; poll for schedule-bar.",
+  "rca_of_the_issue": "In server.py optimize(), the VRPTW branch computes order_full = solve_vrptw(...) which is the full node tour and, for a closed tour (end_idx None), ends back at start_idx. stop_order is then built as [nodes[i].id for i in order_full if i in stop_index_set]. When req.start is None the depot index belongs to stop_index_set, so that stop id is emitted twice. The frontend maps data.order to stop objects, producing a duplicated stop entry (React duplicate key, Paradas 37/36). The non-window heuristic branch is unaffected because it appends the closing node to geo_nodes only, not to order."
+}

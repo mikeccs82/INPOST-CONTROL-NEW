@@ -3,7 +3,7 @@ import { Toaster, toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Upload, Save, Download, FolderOpen, Route as RouteIcon, Zap,
-  Clock, Ruler, MapPin, Loader2, Timer,
+  Clock, Ruler, MapPin, Loader2, Timer, Users,
 } from "lucide-react";
 import { MapView } from "./components/MapView";
 import { StopList } from "./components/StopList";
@@ -13,6 +13,7 @@ import { StopInfoCard } from "./components/StopInfoCard";
 import { UntypedMinutesModal } from "./components/UntypedMinutesModal";
 import { GeocodeResolveDialog } from "./components/GeocodeResolveDialog";
 import { SavedRoutesDialog } from "./components/SavedRoutesDialog";
+import { DriversDialog } from "./components/DriversDialog";
 import {
   importExcel, optimizeRoute, computeRoute, saveRoute, exportRoute,
   getSettings, saveSettings,
@@ -28,13 +29,15 @@ function App() {
   const [geometry, setGeometry] = useState(null);
   const [legs, setLegs] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [schedule, setSchedule] = useState({});
   const [selectedId, setSelectedId] = useState(null);
   const [metric, setMetric] = useState("duration");
   const [importing, setImporting] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
+  const [driversOpen, setDriversOpen] = useState(false);
   const [routeName, setRouteName] = useState("");
-  const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceByType: { P: 0, PD: 0, L: 0 }, untypedMin: 0 });
+  const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceByType: { P: 0, PD: 0, L: 0 }, untypedMin: 0, departureTime: "", respectWindows: true });
   const [pendingImport, setPendingImport] = useState([]);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [untypedModal, setUntypedModal] = useState({ open: false, count: 0 });
@@ -48,6 +51,8 @@ function App() {
         sameAsStart: s.same_as_start ?? true,
         serviceByType: s.service_by_type || { P: 0, PD: 0, L: 0 },
         untypedMin: s.service_time_min ?? 0,
+        departureTime: s.departure_time || "",
+        respectWindows: s.respect_windows ?? true,
       }))
       .catch(() => {});
   }, []);
@@ -68,12 +73,20 @@ function App() {
     end: warehouse.sameAsStart ? null : warehouse.end,
     round_trip: warehouse.sameAsStart,
     service_time_min: 0,
+    departure_time: warehouse.departureTime || null,
   }), [warehouse]);
+
+  const applySchedule = (data) => {
+    const m = {};
+    (data.schedule || []).forEach((x) => { m[x.id] = x; });
+    setSchedule(m);
+  };
 
   const clearRoute = () => {
     setGeometry(null);
     setLegs(null);
     setSummary(null);
+    setSchedule({});
     setSelectedId(null);
   };
 
@@ -88,6 +101,7 @@ function App() {
       setGeometry(data.geometry);
       setLegs(data.legs);
       setSummary(data.summary);
+      applySchedule(data);
     } catch (e) {
       toast.error("No se pudo calcular la ruta");
     }
@@ -177,19 +191,27 @@ function App() {
     }
     setOptimizing(true);
     try {
-      const data = await optimizeRoute({ stops, metric, ...meta() });
+      const data = await optimizeRoute({ stops, metric, respect_windows: warehouse.respectWindows, ...meta() });
       const map = Object.fromEntries(stops.map((s) => [s.id, s]));
-      const ordered = data.order.map((id) => map[id]);
+      const uniqueOrder = [...new Set(data.order)];
+      const ordered = uniqueOrder.map((id) => map[id]).filter(Boolean);
       setStops(ordered);
       setGeometry(data.geometry);
       setLegs(data.legs);
       setSummary(data.summary);
-      toast.success("Ruta optimizada");
+      applySchedule(data);
+      toast.success(data.used_windows ? "Ruta optimizada por horarios" : "Ruta optimizada");
     } catch (e) {
       toast.error("Error al optimizar la ruta");
     } finally {
       setOptimizing(false);
     }
+  };
+
+  const changeWindow = (id, from, to) => {
+    const next = stops.map((s) => (s.id === id ? { ...s, window_from: from || null, window_to: to || null } : s));
+    setStops(next);
+    if (geometry) recalc(next);
   };
 
   const handleSaveSettings = async () => {
@@ -205,6 +227,8 @@ function App() {
         same_as_start: warehouse.sameAsStart,
         service_by_type: sbt,
         service_time_min: Number(warehouse.untypedMin) || 0,
+        departure_time: warehouse.departureTime || null,
+        respect_windows: warehouse.respectWindows,
       });
       toast.success("Configuración guardada");
       const next = applyService(stops);
@@ -287,6 +311,10 @@ function App() {
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#1E5AA8] hover:bg-[#184a8c] px-3 py-2 rounded-md transition-colors disabled:opacity-50">
             {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Importar Excel
           </button>
+          <button data-testid="open-drivers-btn" onClick={() => setDriversOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#F26A21] hover:bg-[#f58220] px-3 py-2 rounded-md transition-colors">
+            <Users size={14} /> Conductores
+          </button>
           <button data-testid="open-saved-btn" onClick={() => setSavedOpen(true)}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-2 rounded-md transition-colors">
             <FolderOpen size={14} /> Rutas
@@ -307,6 +335,16 @@ function App() {
             <Kpi icon={<Ruler size={14} />} label="Distancia" value={fmtDistance(summary?.distance)} />
             <Kpi icon={<Clock size={14} />} label="Tiempo" value={fmtDuration(summary?.duration)} />
           </div>
+          {summary?.departure && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950 border-b border-slate-800 text-[11px] font-mono-tech" data-testid="schedule-bar">
+              <span className="text-slate-400">Salida <b className="text-emerald-400">{summary.departure}</b> → Fin <b className="text-sky-400">{summary.end_time}</b></span>
+              {summary.late_count > 0 ? (
+                <span className="text-red-400 font-bold">{summary.late_count} fuera de horario</span>
+              ) : (
+                <span className="text-emerald-400">Todo en horario</span>
+              )}
+            </div>
+          )}
 
           {/* Scrollable middle */}
           <div className="flex-1 overflow-y-auto thin-scroll min-h-0">
@@ -339,7 +377,7 @@ function App() {
 
           {/* Stop list */}
           <div className="px-3 pb-2">
-            <StopList stops={stops} onReorder={reorder} onRemove={removeStop} selectedId={selectedId} onSelect={setSelectedId} onChangeType={changeType} />
+            <StopList stops={stops} onReorder={reorder} onRemove={removeStop} selectedId={selectedId} onSelect={setSelectedId} onChangeType={changeType} schedule={schedule} onChangeWindow={changeWindow} />
           </div>
           </div>
 
@@ -369,6 +407,7 @@ function App() {
               stop={stops.find((s) => s.id === selectedId)}
               index={stops.findIndex((s) => s.id === selectedId)}
               total={stops.length}
+              sched={schedule[selectedId]}
               onClose={() => setSelectedId(null)}
             />
           )}
@@ -385,6 +424,7 @@ function App() {
       </div>
 
       <SavedRoutesDialog open={savedOpen} onClose={() => setSavedOpen(false)} onLoad={handleLoad} />
+      <DriversDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
       <UntypedMinutesModal
         open={untypedModal.open}
         count={untypedModal.count}

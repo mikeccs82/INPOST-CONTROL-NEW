@@ -16,6 +16,12 @@ from datetime import datetime, timezone
 import httpx
 import pandas as pd
 
+try:
+    from ortools.constraint_solver import routing_enums_pb2, pywrapcp
+    ORTOOLS = True
+except Exception:
+    ORTOOLS = False
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -69,6 +75,8 @@ class OptimizeRequest(BaseModel):
     start: Optional[Waypoint] = None  # warehouse departure
     end: Optional[Waypoint] = None    # warehouse arrival (if different)
     service_time_min: float = 0       # minutes spent at each stop
+    departure_time: Optional[str] = None  # HH:MM departure from warehouse
+    respect_windows: bool = False     # order respecting time windows (VRPTW)
 
 
 class RouteRequest(BaseModel):
@@ -77,6 +85,7 @@ class RouteRequest(BaseModel):
     end: Optional[Waypoint] = None
     round_trip: bool = True
     service_time_min: float = 0
+    departure_time: Optional[str] = None
 
 
 class Settings(BaseModel):
@@ -86,7 +95,27 @@ class Settings(BaseModel):
     same_as_start: bool = True
     service_time_min: float = 0
     service_by_type: Dict[str, float] = Field(default_factory=lambda: {"P": 0, "PD": 0, "L": 0})
+    departure_time: Optional[str] = None
+    respect_windows: bool = True
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class DriverCreate(BaseModel):
+    nombres: str
+    apellidos: str = ""
+    dni: str = ""
+    telefono: str = ""
+    marca: str = ""
+    modelo: str = ""
+    anio: str = ""
+    tamano: str = ""
+    matricula: str = ""
+
+
+class Driver(DriverCreate):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class SavedRouteCreate(BaseModel):
@@ -143,7 +172,9 @@ async def osrm_route(stops: List[Stop]):
         raise HTTPException(502, f"OSRM route error: {data.get('code')}")
     route = data["routes"][0]
     legs = []
+    leg_durations = []
     for leg in route.get("legs", []):
+        leg_durations.append(leg.get("duration", 0))
         coords_leg = []
         for step in leg.get("steps", []):
             g = step.get("geometry", {}).get("coordinates", [])
@@ -157,7 +188,110 @@ async def osrm_route(stops: List[Stop]):
         "distance": route["distance"],  # meters
         "duration": route["duration"],  # seconds
         "legs": legs,  # per-leg [lon,lat] coordinate arrays
+        "leg_durations": leg_durations,  # per-leg seconds
     }
+
+
+def _parse_hhmm(s):
+    if s is None:
+        return None
+    t = str(s).strip()
+    if not t or t.lower() in ("nan", "none", "nat"):
+        return None
+    parts = t.replace(".", ":").split(":")
+    try:
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        return h * 3600 + m * 60
+    except Exception:
+        return None
+
+
+def _fmt_hhmm(sec):
+    if sec is None:
+        return None
+    sec = int(round(sec))
+    h = (sec // 3600) % 24
+    m = (sec % 3600) // 60
+    return f"{h:02d}:{m:02d}"
+
+
+def _compute_schedule(geo_nodes, leg_durations, departure_sec, stop_ids):
+    sched = []
+    seen = set()
+    t = float(departure_sec)
+    for i, node in enumerate(geo_nodes):
+        if i > 0:
+            t += leg_durations[i - 1] if (i - 1) < len(leg_durations) else 0
+        nid = getattr(node, "id", None)
+        if nid in stop_ids and nid not in seen:
+            seen.add(nid)
+            d = node.model_dump()
+            wf = _parse_hhmm(d.get("window_from"))
+            wt = _parse_hhmm(d.get("window_to"))
+            arrival = t
+            wait = 0
+            if wf is not None and arrival < wf:
+                wait = wf - arrival
+                t = wf
+            late = wt is not None and arrival > wt
+            sched.append({
+                "id": nid,
+                "arrival": _fmt_hhmm(arrival),
+                "arrival_sec": int(arrival),
+                "wait_min": int(round(wait / 60)),
+                "late": bool(late),
+                "window_from": d.get("window_from"),
+                "window_to": d.get("window_to"),
+            })
+            t += float(d.get("service_min") or 0) * 60
+    return sched, t
+
+
+def solve_vrptw(travel, service, windows, start, end, departure, penalty=30, time_limit=8):
+    n = len(travel)
+    ends = [end if end is not None else start]
+    mgr = pywrapcp.RoutingIndexManager(n, 1, [start], ends)
+    routing = pywrapcp.RoutingModel(mgr)
+    T = [[int(round(travel[i][j])) if travel[i][j] is not None else 10 ** 8 for j in range(n)] for i in range(n)]
+    S = [int(round(service[i])) for i in range(n)]
+
+    def cb(a, b):
+        f = mgr.IndexToNode(a)
+        tt = mgr.IndexToNode(b)
+        return T[f][tt] + S[f]
+
+    idx = routing.RegisterTransitCallback(cb)
+    routing.SetArcCostEvaluatorOfAllVehicles(idx)
+    horizon = 48 * 3600
+    routing.AddDimension(idx, horizon, horizon, False, "Time")
+    tdim = routing.GetDimensionOrDie("Time")
+    tdim.CumulVar(routing.Start(0)).SetRange(int(departure), int(departure))
+    for node in range(n):
+        if node == start:
+            continue
+        o, c = windows[node]
+        index = mgr.NodeToIndex(node)
+        if index < 0:
+            continue
+        if o is not None:
+            tdim.CumulVar(index).SetMin(int(o))
+        if c is not None:
+            tdim.SetCumulVarSoftUpperBound(index, int(c), int(penalty))
+    params = pywrapcp.DefaultRoutingSearchParameters()
+    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    params.time_limit.FromSeconds(time_limit)
+    sol = routing.SolveWithParameters(params)
+    if not sol:
+        return None
+    order = []
+    i = routing.Start(0)
+    while not routing.IsEnd(i):
+        order.append(mgr.IndexToNode(i))
+        i = sol.Value(routing.NextVar(i))
+    order.append(mgr.IndexToNode(i))
+    return order
 
 
 def path_cost(order, matrix, close):
@@ -447,6 +581,13 @@ async def compute_route(req: RouteRequest):
     service = _service_seconds(req.stops)
     if service is None:
         service = req.service_time_min * 60 * len(req.stops)
+
+    departure_sec = _parse_hhmm(req.departure_time)
+    if departure_sec is None:
+        departure_sec = 8 * 3600
+    stop_ids = {s.id for s in req.stops}
+    schedule, end_sec = _compute_schedule(geo_nodes, result["leg_durations"], departure_sec, stop_ids)
+    late_count = sum(1 for s in schedule if s["late"])
     return {
         "order": [s.id for s in req.stops],
         "summary": {
@@ -455,7 +596,11 @@ async def compute_route(req: RouteRequest):
             "drive_duration": result["duration"],
             "service_duration": service,
             "stops": len(req.stops),
+            "departure": _fmt_hhmm(departure_sec),
+            "end_time": _fmt_hhmm(end_sec),
+            "late_count": late_count,
         },
+        "schedule": schedule,
         "geometry": result["geometry"],
         "legs": result["legs"],
     }
@@ -489,32 +634,72 @@ async def optimize(req: OptimizeRequest):
     matrix = distances if req.metric == "distance" else durations
     other = durations if req.metric == "distance" else distances
 
-    # Solve for the chosen metric AND the other metric, keep the best under the
-    # selected objective (guarantees 'fastest' is never worse than 'shortest').
-    order_main, close = solve_path(matrix, N, start_idx, end_idx, req.round_trip)
-    order_other, _ = solve_path(other, N, start_idx, end_idx, req.round_trip)
-    order = min([order_main, order_other], key=lambda o: path_cost(o, matrix, close))
+    departure_sec = _parse_hhmm(req.departure_time)
+    if departure_sec is None:
+        departure_sec = 8 * 3600
+    stop_ids = {s.id for s in req.stops}
 
-    geo_nodes = [nodes[i] for i in order]
-    if close:
-        geo_nodes = geo_nodes + [nodes[start_idx]]
+    used_windows = False
+    if req.respect_windows and ORTOOLS:
+        service_list = []
+        windows_list = []
+        for i, nd in enumerate(nodes):
+            d = nd.model_dump()
+            if i in stop_index_set:
+                service_list.append(float(d.get("service_min") or 0) * 60)
+                windows_list.append((_parse_hhmm(d.get("window_from")), _parse_hhmm(d.get("window_to"))))
+            else:
+                service_list.append(0)
+                windows_list.append((None, None))
+        try:
+            order_full = solve_vrptw(durations, service_list, windows_list, start_idx, end_idx, departure_sec)
+        except Exception as e:
+            logger.warning(f"VRPTW failed: {e}")
+            order_full = None
+        if order_full:
+            used_windows = True
+            geo_nodes = [nodes[i] for i in order_full]
+            close = end_idx is None
+            seen_ids = set()
+            stop_order = []
+            for i in order_full:
+                if i in stop_index_set and nodes[i].id not in seen_ids:
+                    seen_ids.add(nodes[i].id)
+                    stop_order.append(nodes[i].id)
+
+    if not used_windows:
+        # Distance/time heuristic (no windows). Solve both metrics, keep best.
+        order_main, close = solve_path(matrix, N, start_idx, end_idx, req.round_trip)
+        order_other, _ = solve_path(other, N, start_idx, end_idx, req.round_trip)
+        order = min([order_main, order_other], key=lambda o: path_cost(o, matrix, close))
+        geo_nodes = [nodes[i] for i in order]
+        if close:
+            geo_nodes = geo_nodes + [nodes[start_idx]]
+        stop_order = [nodes[i].id for i in order if i in stop_index_set]
 
     result = await osrm_route(geo_nodes)
-    stop_order = [nodes[i].id for i in order if i in stop_index_set]
 
     service = _service_seconds(req.stops)
     if service is None:
         service = req.service_time_min * 60 * n_stops
+
+    schedule, end_sec = _compute_schedule(geo_nodes, result["leg_durations"], departure_sec, stop_ids)
+    late_count = sum(1 for s in schedule if s["late"])
     return {
         "order": stop_order,
         "round_trip": close,
+        "used_windows": used_windows,
         "summary": {
             "distance": result["distance"],
             "duration": result["duration"] + service,
             "drive_duration": result["duration"],
             "service_duration": service,
             "stops": n_stops,
+            "departure": _fmt_hhmm(departure_sec),
+            "end_time": _fmt_hhmm(end_sec),
+            "late_count": late_count,
         },
+        "schedule": schedule,
         "geometry": result["geometry"],
         "legs": result["legs"],
     }
@@ -537,6 +722,37 @@ async def put_settings(body: Settings):
     doc["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.settings.update_one({"id": "default"}, {"$set": doc}, upsert=True)
     return doc
+
+
+@api_router.get("/drivers", response_model=List[Driver])
+async def list_drivers():
+    docs = await db.drivers.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return docs
+
+
+@api_router.post("/drivers", response_model=Driver)
+async def create_driver(body: DriverCreate):
+    doc = Driver(**body.model_dump())
+    await db.drivers.insert_one(doc.model_dump())
+    return doc
+
+
+@api_router.put("/drivers/{driver_id}", response_model=Driver)
+async def update_driver(driver_id: str, body: DriverCreate):
+    existing = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Conductor no encontrado")
+    update = body.model_dump()
+    await db.drivers.update_one({"id": driver_id}, {"$set": update})
+    return await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+
+
+@api_router.delete("/drivers/{driver_id}")
+async def delete_driver(driver_id: str):
+    res = await db.drivers.delete_one({"id": driver_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Conductor no encontrado")
+    return {"ok": True}
 
 
 @api_router.post("/routes", response_model=SavedRoute)

@@ -99,6 +99,8 @@ export const WarehousePanel = ({ warehouse, onChange, onSave }) => {
   const [open, setOpen] = useState(true);
   const { start, end, sameAsStart } = warehouse;
   const serviceByType = warehouse.serviceByType || { P: 0, PD: 0, L: 0 };
+  const departureTime = warehouse.departureTime || "";
+  const respectWindows = warehouse.respectWindows ?? true;
 
   const update = (patch) => onChange({ ...warehouse, ...patch });
 
@@ -146,6 +148,31 @@ export const WarehousePanel = ({ warehouse, onChange, onSave }) => {
                   />
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-1.5">
+              <Clock size={11} /> Hora de salida de la nave
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                data-testid="wh-departure"
+                type="time"
+                value={departureTime}
+                onChange={(e) => update({ departureTime: e.target.value })}
+                className={inputCls + " font-mono-tech w-32"}
+              />
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer whitespace-nowrap">
+                <input
+                  data-testid="wh-respect"
+                  type="checkbox"
+                  checked={respectWindows}
+                  onChange={(e) => update({ respectWindows: e.target.checked })}
+                  className="accent-[#F26A21] w-4 h-4"
+                />
+                Respetar horarios
+              </label>
             </div>
           </div>
 

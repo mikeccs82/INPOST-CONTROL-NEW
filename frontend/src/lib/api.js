@@ -39,6 +39,26 @@ export const saveSettings = async (payload) => {
   return data;
 };
 
+export const listDrivers = async () => {
+  const { data } = await client.get("/drivers");
+  return data;
+};
+
+export const createDriver = async (payload) => {
+  const { data } = await client.post("/drivers", payload);
+  return data;
+};
+
+export const updateDriver = async (id, payload) => {
+  const { data } = await client.put(`/drivers/${id}`, payload);
+  return data;
+};
+
+export const deleteDriver = async (id) => {
+  const { data } = await client.delete(`/drivers/${id}`);
+  return data;
+};
+
 export const saveRoute = async (payload) => {
   const { data } = await client.post("/routes", payload);
   return data;
