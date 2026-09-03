@@ -1,0 +1,87 @@
+{
+  "theme": "Dark Theme (Archetype 2: The Performance Pro)",
+  "typography": {
+    "font_families": {
+      "headings": "Chivo, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "IBM Plex Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-2xl font-bold tracking-tight",
+      "h2": "text-xl font-semibold tracking-tight",
+      "body": "text-sm",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em]"
+    },
+    "rules": [
+      "Never use Inter for headings.",
+      "Use IBM Plex Mono for technical numbers (distance, lat/lon)."
+    ]
+  },
+  "colors": {
+    "background": "#0F172A",
+    "surface": "#1E293B",
+    "border": "#334155",
+    "primary": "#FF6B00",
+    "primary_hover": "#FF8533",
+    "text_main": "#F8FAFC",
+    "text_muted": "#94A3B8",
+    "success": "#10B981",
+    "danger": "#EF4444"
+  },
+  "grids": {
+    "kpi_cards": "High Density Grid. grid-cols-3 with gap-4."
+  },
+  "layouts": {
+    "overall_structure": "Map-centric fixed full-screen layout. Left sidebar (w-[400px]) for controls, right area (flex-1) for Leaflet Map.",
+    "sidebar": "Flex-col, h-screen. Sticky Header. Fixed KPI panel. Add/Search input section. Scrollable flex-1 list for stops. Fixed bottom CTA area for Optimize Route."
+  },
+  "components": {
+    "stop_list_item": "bg-slate-800 border border-slate-700 hover:border-slate-500 rounded p-3 mb-2 flex items-center gap-3. Draggable. Left drag handle, square number badge, details flex-1, right delete button.",
+    "inputs": "bg-slate-900 border-slate-700 text-white focus:ring-1 focus:ring-[#FF6B00]",
+    "buttons": "Tactical styling. Primary: Solid #FF6B00, black text, font-bold, slightly aggressive sharp edges (rounded-sm), shadow-[2px_2px_0px_rgba(255,107,0,0.5)].",
+    "map_markers": "Custom Leaflet divIcons. CSS styled HTML markers instead of image pins. Numbered 1-N. Depot marker has distinct square shape and success color."
+  },
+  "visual_enhancers": {
+    "map_theme": "Apply CSS filter `filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);` to Leaflet tile layer to achieve dark mode over default OSM tiles.",
+    "toast": "Use sonner for notifications (e.g. Stop added, Route Optimized, Export successful)."
+  },
+  "motion": {
+    "interactions": "framer-motion for list reordering. hover states with fast transitions.",
+    "map": "FlyToBounds animation when route is calculated to focus on the active polyline."
+  },
+  "accessibility": {
+    "contrast": "Black text on Primary (#FF6B00) button. All text meets APCA.",
+    "testing": "All interactive elements MUST include data-testid attributes."
+  },
+  "media": {
+    "rules": "No generic placeholders."
+  },
+  "image_urls": {
+    "avatar": {
+      "url": "https://images.unsplash.com/photo-1551825687-f9de1603ed8b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwyfHxkZWxpdmVyeSUyMGxvZ2lzdGljcyUyMGRyaXZlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc4ODQzOTQwMnww&ixlib=rb-4.1.0&q=85",
+      "description": "User profile avatar for the dashboard header"
+    }
+  },
+  "3d_libraries": {
+    "instructions": "N/A for 2D map."
+  },
+  "instructions_to_main_agent": [
+    "TECH STACK: React (.js), Tailwind CSS, Leaflet/react-leaflet.",
+    "CRITICAL: Do NOT create .tsx files. Use standard .js or .jsx files.",
+    "DEPENDENCIES: Install `leaflet`, `react-leaflet`, `lucide-react`, `framer-motion`, `xlsx`, `sonner`, `@hello-pangea/dnd`.",
+    "GEOCODING: Use OpenStreetMap Nominatim for the search input. Fetch from `https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=5`.",
+    "MAP ROUTING & POLYLINE: Use OSRM public API `https://router.project-osrm.org/route/v1/driving/{coords}?overview=full&geometries=geojson` to get a real road polyline. Format coords as `lon,lat;lon,lat`. Render as <GeoJSON> or <Polyline> in react-leaflet.",
+    "OPTIMIZATION LOGIC: Implement a 'Nearest Neighbor' heuristic in JS to sort the array of stops. Start at Depot (index 0), find nearest unvisited stop, repeat, then return to Depot.",
+    "EXCEL PARSING: Use `xlsx` library to parse incoming Excel/CSV with columns like Address, Lat, Lng.",
+    "STATE: Maintain global stops array. First item = Depot. When order changes, update the route polyline."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "DO NOT apply universal transition (transition: all). Add specific transitions.",
+    "DO NOT center align the app container. Keep text left-aligned.",
+    "NEVER use emojis as icons. Use lucide-react icons.",
+    "DO NOT use complete transparent background in header, overlays, any surface that has content under it."
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "summary": "Full backend + frontend E2E testing of the RUTAOPT route optimizer (OSM/Nominatim/OSRM). Created pytest suite (24 tests) covering /api/geocode, /api/optimize (duration+distance, round-trip on/off, depot_index), /api/route, /api/import-excel (real /app/sample_stops.xlsx, 36 rows), /api/routes CRUD and /api/export - 24/24 passed. Playwright UI testing covered: app load, Excel import (36 stops + 36 markers), manual Lat/Lon add + invalid-coord validation, Nominatim address search -> add stop, metric & round-trip toggles, Optimizar ruta (KPIs + orange polyline, depot stays first), drag-and-drop reorder with auto-recalculation, set-depot, delete stop, save route, saved-routes dialog load/delete, and xlsx export download. All UI flows passed after I added a missing data-testid on the map. One optimization-quality defect found: metric='duration' returns a route that is SLOWER than the one returned by metric='distance'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/optimize",
+        "issue": "Optimizing for 'duration' (Mas rapido) yields a WORSE duration than optimizing for 'distance'. With the 36 real stops from sample_stops.xlsx: metric=duration -> 72.5 min / 24.4 km; metric=distance -> 70.1 min / 22.8 km (both evaluated on the same OSRM duration matrix). So the 'fastest' option is objectively slower than the 'shortest' option - nearest_neighbour + 2-opt is landing in a poor local optimum. Suggest Or-opt moves / multiple NN restarts, or compute both candidate orders and keep whichever is best for the selected metric."
+      },
+      {
+        "endpoint": "POST /api/import-excel",
+        "issue": "Geocoding of rows with missing lat/lon is fully sequential with a hard `await asyncio.sleep(1.0)` per row (line 267). A 100-row file lacking coordinates would block the request for 100+ seconds and hit the ingress/proxy timeout. Sleep only between actual requests (skip the last one) and cap/parallelise cautiously, or move to a background job with progress. Not reproducible with the provided sample (all 36 rows already have coordinates)."
+      },
+      {
+        "endpoint": "POST /api/optimize",
+        "issue": "two_opt() recomputes route_cost() over the whole tour twice inside the innermost loop, making each improvement pass ~O(n^3). Fine at 36 stops (1.2s measured) but will degrade sharply beyond ~150 stops. Use delta-cost evaluation instead."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MapView",
+        "issue": "data-testid=\"route-map\" was passed to react-leaflet's <MapContainer>, which does not forward unknown props to the DOM, so the attribute never rendered and the map was untestable. FIXED by me: wrapped MapContainer in a div carrying data-testid=\"route-map\".",
+        "selector": "[data-testid=\"route-map\"]",
+        "priority": "LOW"
+      },
+      {
+        "component": "AddStopPanel (Lat/Lon tab)",
+        "issue": "After an invalid lat/lon submission the error toast appears correctly but the invalid text is left in the inputs with no inline/field-level error state - only a transient toast. Minor UX polish.",
+        "selector": "[data-testid=\"manual-lat\"]",
+        "priority": "LOW"
+      },
+      {
+        "component": "AddStopPanel (search)",
+        "issue": "A stop added from address search stores name = first two comma segments of display_name and address = full display_name, so the list row visually repeats the same text twice (e.g. '100, Calle de Alcala' followed by '100, Calle de Alcala, Goya, Salamanca, ...'). Cosmetic.",
+        "selector": "[data-testid=\"stop-item-0\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Sidebar stop list",
+        "issues": [
+          "Coordinate/time-window metadata uses text-slate-500 on a bg-slate-800 card at 10px - contrast is roughly 2.5:1, below WCAG AA for small text. Consider text-slate-400.",
+          "Long stop names/addresses are truncated with no tooltip (title attribute) so the full address is unreadable in the panel."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Improve /api/optimize duration objective: metric='duration' currently returns a slower route than metric='distance' on the 36-stop sample (72.5 min vs 70.1 min). Add Or-opt / NN multi-restarts, or evaluate both orders and return the best for the chosen metric.",
+    "Make /api/import-excel geocoding non-blocking / bounded - the per-row 1s sleep will time out on larger files with missing coordinates.",
+    "Optional: raise contrast of the 10px slate-500 metadata in StopList and add title tooltips for truncated stop names/addresses.",
+    "Optional: avoid calling recalc() from inside the setStops updater in App.js (removeStop/reorder/setDepot) - side effects in a state updater fire twice under React StrictMode, duplicating /api/route calls."
+  ],
+  "critical_code_review_comments": [
+    "App.js removeStop/reorder/setDepot invoke the async recalc() inside the setStops updater function. Updater functions must be pure; under React 18 StrictMode this double-invokes and issues duplicate POST /api/route requests. Move recalc into a useEffect on [stops] or compute `next` outside setStops.",
+    "server.py optimize(): nearest_neighbor + two_opt gives no guarantee the chosen metric is actually improved relative to the other metric's tour - measured regression on the real 36-stop dataset (see backend_issues).",
+    "server.py import_excel(): unconditional `await asyncio.sleep(1.0)` per geocoded row inside the request handler is an unbounded latency risk; also sleeps after the final row unnecessarily.",
+    "react-leaflet MapContainer silently drops unknown props - never rely on it for data-* attributes (fixed).",
+    "Positive: MongoDB _id is correctly projected out on all /api/routes reads, all URLs come from env vars, and Pydantic validation returns 422/400/404 correctly."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/MapView.jsx",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/conftest.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created and then deleted transient saved routes named TEST_ruta_crud / TEST_ruta_actualizada / TEST_borrar (pytest, auto-cleaned) and TEST_UI_Ruta / TEST_Search_Ruta (UI, deleted at end of test). DB left clean - 0 saved routes remaining.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "N/A - app has no authentication (as requested). /app/memory/test_credentials.md exists but is not needed.",
+  "context_for_next_testing_agent": "Backend suite lives at /app/backend/tests/backend_test.py with fixtures in conftest.py (BASE_URL from /app/frontend/.env). Run with `cd /app/backend/tests && python -m pytest backend_test.py -v` (pytest.ini forces -n 2 --dist loadscope). Tests hit the live public Nominatim + OSRM servers, so a _retry() helper wraps those calls - occasional rate limiting is possible. UI testids verified working: import-btn, file-input, open-saved-btn, export-btn, tab-search, tab-coords, search-input, search-result-N, manual-name/lat/lon, add-manual-btn, metric-duration, metric-distance, roundtrip-toggle, stop-item-N, set-depot-N, remove-stop-N, route-name-input, save-btn, optimize-btn, saved-routes-dialog, load-route-<id>, delete-route-<id>, close-saved-dialog, kpi-paradas/kpi-distancia/kpi-tiempo, route-map (added by me), empty-stops. Drag-and-drop reorder works via mouse.down/move(steps>=15)/up on the [class*='cursor-grab'] handle inside stop-item-N; allow ~5s after drop for the /api/route recalculation. Toasts (sonner) auto-dismiss in ~4s, so assert on toast text within 2s of the action. Excel import of the 36-row sample takes ~2-5s; 36-stop optimize ~1-2s.",
+  "rca_of_the_issue": "Duration-metric regression: server.py builds an OSRM duration matrix, runs nearest_neighbor from the depot, then a first-improvement 2-opt that keeps index 0 fixed. First-improvement 2-opt from a single greedy seed converges to a local optimum whose quality varies by matrix; on this dataset the distance-matrix tour happens to also be faster in real driving time than the duration-matrix tour (verified independently against the raw OSRM /table durations: 70.1 min vs 72.5 min). Fix is algorithmic (Or-opt/segment-insertion moves, several NN starts, or cross-evaluate both metrics' tours and keep the best under the requested objective). MapView testid: react-leaflet's MapContainer only spreads a whitelisted prop set onto the container div, so data-testid was dropped - resolved by wrapping it in a plain div."
+}
