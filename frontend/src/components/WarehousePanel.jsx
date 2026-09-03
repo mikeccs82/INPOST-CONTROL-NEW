@@ -97,7 +97,8 @@ const AddressField = ({ label, value, onSelect, testid, accent }) => {
 
 export const WarehousePanel = ({ warehouse, onChange, onSave }) => {
   const [open, setOpen] = useState(true);
-  const { start, end, sameAsStart, serviceTimeMin } = warehouse;
+  const { start, end, sameAsStart } = warehouse;
+  const serviceByType = warehouse.serviceByType || { P: 0, PD: 0, L: 0 };
 
   const update = (patch) => onChange({ ...warehouse, ...patch });
 
@@ -130,11 +131,22 @@ export const WarehousePanel = ({ warehouse, onChange, onSave }) => {
 
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-1.5">
-              <Clock size={11} /> Tiempo en cada parada (min)
+              <Clock size={11} /> Minutos por tipo de parada
             </span>
-            <input data-testid="wh-service-time" type="number" min="0" step="1" className={inputCls + " font-mono-tech"}
-              placeholder="0" value={serviceTimeMin}
-              onChange={(e) => update({ serviceTimeMin: e.target.value })} />
+            <div className="grid grid-cols-3 gap-2">
+              {[["P", "Particular"], ["PD", "PUDO"], ["L", "Locker"]].map(([k, label]) => (
+                <div key={k}>
+                  <div className="text-[10px] text-slate-300 font-semibold mb-1 text-center">{label}</div>
+                  <input
+                    data-testid={`wh-min-${k}`}
+                    type="number" min="0" step="1"
+                    className={inputCls + " font-mono-tech text-center px-1"}
+                    value={serviceByType[k] ?? 0}
+                    onChange={(e) => update({ serviceByType: { ...serviceByType, [k]: e.target.value } })}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <button data-testid="wh-save-btn" onClick={onSave}

@@ -1,0 +1,40 @@
+{
+  "summary": "Round-3 testing of BoxLogic (per-type service minutes, editable stop type, untyped-minutes modal, geocode resolution dialog). Backend: 60/60 pytest tests pass (11 new in test_types_geocode.py + 49 regression). Frontend: all 5 requested flows verified end-to-end on the public URL (config persistence, untyped modal, type dropdown recompute, geocode resolve dialog with candidate+manual, optimize with per-type service sum, colored legs + scroll regression). No blocking issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "GeocodeResolveDialog", "issues": ["Clicking the backdrop closes the dialog and onClose also clears pendingImport, so all unresolved stops are silently discarded with no way to reopen the dialog (user must re-import the Excel). Suggest not closing on backdrop click, or keeping pendingImport with a 'Resolver N direcciones' button in the sidebar.", "If the user selects 'Lat/Lon manual' but leaves lat/lon empty/invalid, the stop is silently skipped on confirm with no validation message."]},
+      {"screen": "WarehousePanel", "issues": ["The minutes for UNTYPED stops (untypedMin / service_time_min) can only be set through the import modal; there is no input for it in the 'Minutos por tipo de parada' row, so it cannot be changed later without re-importing."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_types_geocode.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/types_geocode.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional UX: don't discard pending geocode stops when the resolve dialog is dismissed (backdrop click) / allow reopening it.",
+    "Optional UX: validate empty manual lat/lon in the resolve dialog instead of silently skipping the stop.",
+    "Optional: expose the 'minutos para paradas sin tipo' value in the config panel."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~646 lines and mixes models, TSP heuristics, geocoding and routes; consider splitting into modules before it grows further.",
+    "import-excel geocodes sequentially with a 1s sleep per row; a 36-row file blocks a worker for ~36s. Consider a background job or client-side batching if files grow.",
+    "_geocode_candidates uses countrycodes=es hardcoded (same as /geocode); fine for current scope but should be config-driven if the tool is used outside Spain."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_types_geocode.py (new)",
+    "/app/backend/tests/backend_test.py (updated TestImportExcel to the new resolved/pending response shape)",
+    "/app/frontend/src/components/StopList.jsx (added data-testid=\"stop-min-{index}\" to the minute badge)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None persisted. Settings doc reset to service_time_min=5, service_by_type {P:3,PD:4,L:6}. Test-created saved routes cleaned up by fixtures.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "No auth",
+  "context_for_next_testing_agent": "Backend suite: /app/backend/tests/{backend_test.py,test_warehouse.py,test_legs.py,test_types_geocode.py} - run `cd /app/backend && pytest tests/ -q`. Verified: import of sample_geo_test.xlsx -> resolved=1/pending=2 (not_found + far_apart with 5 candidates), sample_stops.xlsx -> resolved=36/untyped=36; PUT/GET settings service_by_type; /optimize & /route service_duration = sum(service_min)*60 with fallback to uniform service_time_min when no stop carries service_min; export contains 'Tipo' + 'Min. parada'. Frontend verified: wh-min-P/PD/L persistence across reload, untyped-modal 5m applied to all 36 badges, stop-type-0 -> L gives 6m and PD gives 4m, optimize of 36 stops service_duration = 6+3+4+5*33 = 178 min, KPIs, 36 orange legs, green/red legs on stop selection, sidebar scroll OK, geocode-resolve-dialog candidate + manual (41.37/2.12) both add stops with markers. NOTE: the file input is hidden -> use wait_for_selector(state='attached') before set_input_files.",
+  "rca_of_the_issue": "Only pre-existing failure was backend_test.py::test_import_sample_xlsx asserting the old import-excel shape (d['stops']/d['skipped']); the endpoint intentionally now returns resolved/pending. Fixed the test (test-code only) to the new contract; all 60 tests pass."
+}

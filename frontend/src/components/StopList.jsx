@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Flag, Clock } from "lucide-react";
 
-export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect }) => {
+export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onChangeType }) => {
   const refs = useRef({});
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect }) =
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-white truncate" title={s.name}>{s.name || "Parada"}</div>
                         {s.address && <div className="text-xs text-slate-400 truncate" title={s.address}>{s.address}</div>}
-                        <div className="flex items-center gap-3 mt-0.5">
+                        <div className="flex items-center gap-3 mt-1">
                           <span className="text-[10px] font-mono-tech text-slate-400">
                             {Number(s.lat).toFixed(4)}, {Number(s.lon).toFixed(4)}
                           </span>
@@ -69,6 +69,21 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect }) =
                               <Clock size={10} />
                               {(s.window_from || "").slice(0, 5)}–{(s.window_to || "").slice(0, 5)}
                             </span>
+                          )}
+                          <select
+                            data-testid={`stop-type-${index}`}
+                            value={s.stop_type || ""}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onChangeType(s.id, e.target.value)}
+                            className="ml-auto text-[10px] bg-slate-900 border border-slate-700 text-slate-200 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] cursor-pointer"
+                          >
+                            <option value="">Sin tipo</option>
+                            <option value="P">Particular</option>
+                            <option value="PD">PUDO</option>
+                            <option value="L">Locker</option>
+                          </select>
+                          {s.service_min != null && (
+                            <span data-testid={`stop-min-${index}`} className="text-[10px] font-mono-tech text-[#F26A21]">{s.service_min}m</span>
                           )}
                         </div>
                       </div>

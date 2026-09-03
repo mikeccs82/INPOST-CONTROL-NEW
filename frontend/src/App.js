@@ -10,6 +10,8 @@ import { StopList } from "./components/StopList";
 import { AddStopPanel } from "./components/AddStopPanel";
 import { WarehousePanel } from "./components/WarehousePanel";
 import { StopInfoCard } from "./components/StopInfoCard";
+import { UntypedMinutesModal } from "./components/UntypedMinutesModal";
+import { GeocodeResolveDialog } from "./components/GeocodeResolveDialog";
 import { SavedRoutesDialog } from "./components/SavedRoutesDialog";
 import {
   importExcel, optimizeRoute, computeRoute, saveRoute, exportRoute,
@@ -32,7 +34,10 @@ function App() {
   const [optimizing, setOptimizing] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [routeName, setRouteName] = useState("");
-  const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceTimeMin: 0 });
+  const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceByType: { P: 0, PD: 0, L: 0 }, untypedMin: 0 });
+  const [pendingImport, setPendingImport] = useState([]);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [untypedModal, setUntypedModal] = useState({ open: false, count: 0 });
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -41,7 +46,8 @@ function App() {
         start: s.start || null,
         end: s.end || null,
         sameAsStart: s.same_as_start ?? true,
-        serviceTimeMin: s.service_time_min ?? 0,
+        serviceByType: s.service_by_type || { P: 0, PD: 0, L: 0 },
+        untypedMin: s.service_time_min ?? 0,
       }))
       .catch(() => {});
   }, []);
@@ -49,11 +55,19 @@ function App() {
   const startWp = warehouse.start;
   const endWp = warehouse.sameAsStart ? null : warehouse.end;
 
+  const serviceForStop = useCallback((s) => {
+    const t = s.stop_type;
+    const v = t ? Number(warehouse.serviceByType?.[t]) : Number(warehouse.untypedMin);
+    return Number.isFinite(v) ? v : 0;
+  }, [warehouse.serviceByType, warehouse.untypedMin]);
+
+  const applyService = useCallback((arr) => arr.map((s) => ({ ...s, service_min: serviceForStop(s) })), [serviceForStop]);
+
   const meta = useCallback(() => ({
     start: warehouse.start,
     end: warehouse.sameAsStart ? null : warehouse.end,
     round_trip: warehouse.sameAsStart,
-    service_time_min: Number(warehouse.serviceTimeMin) || 0,
+    service_time_min: 0,
   }), [warehouse]);
 
   const clearRoute = () => {
@@ -86,9 +100,13 @@ function App() {
     clearRoute();
     try {
       const data = await importExcel(file);
-      const parsed = data.stops.map((s) => ({ ...s, id: s.id || genId() }));
-      setStops(parsed);
-      toast.success(`${parsed.length} paradas importadas` + (data.geocoded ? ` · ${data.geocoded} geocodificadas` : "") + (data.skipped ? ` · ${data.skipped} omitidas` : ""));
+      const resolved = applyService(data.resolved.map((s) => ({ ...s, id: s.id || genId() })));
+      setStops(resolved);
+      const pend = data.pending.map((s) => ({ ...s, id: s.id || genId() }));
+      setPendingImport(pend);
+      toast.success(`${data.resolved_count} paradas importadas` + (data.pending_count ? ` · ${data.pending_count} por resolver` : ""));
+      if (data.untyped_count > 0) setUntypedModal({ open: true, count: data.untyped_count });
+      if (pend.length > 0) setResolveOpen(true);
     } catch (err) {
       toast.error("Error al importar el Excel");
     } finally {
@@ -97,7 +115,44 @@ function App() {
     }
   };
 
-  const addStop = (partial) => setStops((prev) => [...prev, { ...partial, id: genId() }]);
+  const applyUntyped = (minutes) => {
+    setWarehouse((w) => ({ ...w, untypedMin: minutes }));
+    setStops((prev) => prev.map((s) => (s.stop_type ? s : { ...s, service_min: minutes })));
+    setUntypedModal({ open: false, count: 0 });
+  };
+
+  const handleResolve = (newStops) => {
+    const added = applyService(newStops.map((s) => ({ ...s, id: s.id || genId() })));
+    setStops((prev) => [...prev, ...added]);
+    setResolveOpen(false);
+    setPendingImport([]);
+    if (added.length) toast.success(`${added.length} parada(s) añadida(s)`);
+  };
+
+  const updateSummaryService = (arr) => {
+    setSummary((prev) => {
+      if (!prev || prev.drive_duration == null) return prev;
+      const svc = arr.reduce((a, s) => a + (Number(s.service_min) || 0), 0) * 60;
+      return { ...prev, service_duration: svc, duration: prev.drive_duration + svc };
+    });
+  };
+
+  const changeType = (id, type) => {
+    const next = stops.map((s) => {
+      if (s.id !== id) return s;
+      const ns = { ...s, stop_type: type || null };
+      ns.service_min = serviceForStop(ns);
+      return ns;
+    });
+    setStops(next);
+    updateSummaryService(next);
+  };
+
+  const addStop = (partial) => {
+    const s = { ...partial, id: genId(), stop_type: partial.stop_type || null };
+    s.service_min = serviceForStop(s);
+    setStops((prev) => [...prev, s]);
+  };
 
   const removeStop = (id) => {
     const next = stops.filter((s) => s.id !== id);
@@ -139,14 +194,22 @@ function App() {
 
   const handleSaveSettings = async () => {
     try {
+      const sbt = {
+        P: Number(warehouse.serviceByType?.P) || 0,
+        PD: Number(warehouse.serviceByType?.PD) || 0,
+        L: Number(warehouse.serviceByType?.L) || 0,
+      };
       await saveSettings({
         start: warehouse.start,
         end: warehouse.sameAsStart ? null : warehouse.end,
         same_as_start: warehouse.sameAsStart,
-        service_time_min: Number(warehouse.serviceTimeMin) || 0,
+        service_by_type: sbt,
+        service_time_min: Number(warehouse.untypedMin) || 0,
       });
       toast.success("Configuración guardada");
-      if (geometry) recalc(stops);
+      const next = applyService(stops);
+      setStops(next);
+      updateSummaryService(next);
     } catch (e) {
       toast.error("Error al guardar la configuración");
     }
@@ -162,7 +225,7 @@ function App() {
       await saveRoute({
         name, stops, metric, round_trip: warehouse.sameAsStart, depot_index: 0,
         start: warehouse.start, end: warehouse.sameAsStart ? null : warehouse.end,
-        service_time_min: Number(warehouse.serviceTimeMin) || 0,
+        service_time_min: Number(warehouse.untypedMin) || 0,
       });
       toast.success("Ruta guardada");
       setRouteName("");
@@ -194,12 +257,13 @@ function App() {
     const parsed = r.stops.map((s) => ({ ...s, id: s.id || genId() }));
     setStops(parsed);
     setMetric(r.metric || "duration");
-    setWarehouse({
+    setWarehouse((w) => ({
+      ...w,
       start: r.start || null,
       end: r.end || null,
       sameAsStart: r.end ? false : true,
-      serviceTimeMin: r.service_time_min || 0,
-    });
+      untypedMin: r.service_time_min || 0,
+    }));
     clearRoute();
     setSavedOpen(false);
     toast.success(`Ruta "${r.name}" cargada`);
@@ -275,7 +339,7 @@ function App() {
 
           {/* Stop list */}
           <div className="px-3 pb-2">
-            <StopList stops={stops} onReorder={reorder} onRemove={removeStop} selectedId={selectedId} onSelect={setSelectedId} />
+            <StopList stops={stops} onReorder={reorder} onRemove={removeStop} selectedId={selectedId} onSelect={setSelectedId} onChangeType={changeType} />
           </div>
           </div>
 
@@ -321,6 +385,19 @@ function App() {
       </div>
 
       <SavedRoutesDialog open={savedOpen} onClose={() => setSavedOpen(false)} onLoad={handleLoad} />
+      <UntypedMinutesModal
+        open={untypedModal.open}
+        count={untypedModal.count}
+        initial={warehouse.untypedMin}
+        onConfirm={applyUntyped}
+        onCancel={() => setUntypedModal({ open: false, count: 0 })}
+      />
+      <GeocodeResolveDialog
+        open={resolveOpen}
+        pending={pendingImport}
+        onConfirm={handleResolve}
+        onClose={() => { setResolveOpen(false); setPendingImport([]); }}
+      />
     </div>
   );
 }

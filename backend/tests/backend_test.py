@@ -151,17 +151,18 @@ class TestImportExcel:
         assert r.status_code == 200, r.text[:400]
         d = r.json()
         assert d["total"] == 36, d["total"]
-        assert len(d["stops"]) == d["total"] - d["skipped"]
-        assert len(d["stops"]) >= 30
-        s = d["stops"][0]
-        for key in ("id", "name", "address", "lat", "lon", "order_id", "window_from", "window_to"):
+        # New response shape (round 3): resolved / pending instead of stops / skipped
+        assert d["resolved_count"] + d["pending_count"] == d["total"]
+        assert len(d["resolved"]) >= 30
+        s = d["resolved"][0]
+        for key in ("id", "name", "address", "lat", "lon", "order_id", "window_from", "window_to", "stop_type"):
             assert key in s, f"missing {key}"
         assert isinstance(s["lat"], float) and isinstance(s["lon"], float)
         assert s["address"], "address should be populated from the Spanish 'Dirección' column"
         assert s["name"], "name should be populated from 'Nombre de ubicación'"
         assert s["order_id"], "order_id should map from 'ID de orden'"
         assert 27 < s["lat"] < 44 and -19 < s["lon"] < 5
-        ids = [x["id"] for x in d["stops"]]
+        ids = [x["id"] for x in d["resolved"]]
         assert len(ids) == len(set(ids)), "stop ids must be unique"
 
     def test_import_invalid_file_400(self, api_client):

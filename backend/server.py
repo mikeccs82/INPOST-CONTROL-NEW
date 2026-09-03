@@ -48,6 +48,8 @@ class Stop(BaseModel):
     notes: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    stop_type: Optional[str] = None  # 'P' particular, 'PD' pudo, 'L' locker
+    service_min: Optional[float] = None  # minutes spent at this stop
 
 
 class Waypoint(BaseModel):
@@ -83,6 +85,7 @@ class Settings(BaseModel):
     end: Optional[Waypoint] = None
     same_as_start: bool = True
     service_time_min: float = 0
+    service_by_type: Dict[str, float] = Field(default_factory=lambda: {"P": 0, "PD": 0, "L": 0})
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -273,6 +276,45 @@ async def _geocode_one(c: httpx.AsyncClient, address: str):
     return None, None
 
 
+async def _geocode_candidates(c: httpx.AsyncClient, address: str):
+    try:
+        r = await c.get(f"{NOMINATIM}/search", params={"q": address, "format": "jsonv2", "limit": 5, "addressdetails": 1, "countrycodes": "es"})
+        r.raise_for_status()
+        data = r.json()
+        return [
+            {"display_name": d.get("display_name"), "lat": float(d["lat"]), "lon": float(d["lon"]), "type": d.get("type")}
+            for d in data
+        ]
+    except Exception as e:
+        logger.warning(f"geocode candidates fail for {address}: {e}")
+        return []
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def _max_spread_km(cands):
+    m = 0.0
+    for i in range(len(cands)):
+        for j in range(i + 1, len(cands)):
+            d = _haversine_km(cands[i]["lat"], cands[i]["lon"], cands[j]["lat"], cands[j]["lon"])
+            m = max(m, d)
+    return m
+
+
+def _service_seconds(stops):
+    dumps = [s.model_dump() for s in stops]
+    has_sm = any(d.get("service_min") is not None for d in dumps)
+    if not has_sm:
+        return None
+    return sum(float(d.get("service_min") or 0) for d in dumps) * 60
+
+
 @api_router.post("/import-excel")
 async def import_excel(file: UploadFile = File(...)):
     content = await file.read()
@@ -299,6 +341,13 @@ async def import_excel(file: UploadFile = File(...)):
     c_notes = pick("notas", "notes")
     c_phone = pick("número de teléfono", "numero de telefono", "phone")
     c_email = pick("email", "correo")
+    c_type = pick("tipo de parada", "tipo", "type", "stop type")
+
+    def norm_type(v):
+        if v is None:
+            return None
+        t = str(v).strip().upper()
+        return t if t in ("P", "PD", "L") else None
 
     stops = []
     to_geocode = []
@@ -327,30 +376,51 @@ async def import_excel(file: UploadFile = File(...)):
             "notes": str(val(c_notes)) if val(c_notes) is not None else None,
             "phone": str(val(c_phone)) if val(c_phone) is not None else None,
             "email": str(val(c_email)) if val(c_email) is not None else None,
+            "stop_type": norm_type(val(c_type)),
             "lat": float(lat) if lat is not None else None,
             "lon": float(lon) if lon is not None else None,
         }
         stops.append(stop)
-        if stop["lat"] is None or stop["lon"] is None:
-            if stop["address"]:
-                to_geocode.append(stop)
+        if (stop["lat"] is None or stop["lon"] is None) and stop["address"]:
+            to_geocode.append(stop)
 
-    # Geocode missing addresses (respecting Nominatim ~1 req/s)
-    geocoded = 0
+    # Geocode missing addresses with candidates (respect Nominatim ~1 req/s)
+    pending_info = {}
     if to_geocode:
         async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as c:
             for idx, stop in enumerate(to_geocode):
                 if idx > 0:
-                    await asyncio.sleep(1.0)  # respect Nominatim ~1 req/s, only between requests
-                lat, lon = await _geocode_one(c, stop["address"])
-                if lat is not None:
-                    stop["lat"] = lat
-                    stop["lon"] = lon
-                    geocoded += 1
+                    await asyncio.sleep(1.0)
+                cands = await _geocode_candidates(c, stop["address"])
+                if len(cands) == 1:
+                    stop["lat"] = cands[0]["lat"]
+                    stop["lon"] = cands[0]["lon"]
+                elif len(cands) == 0:
+                    pending_info[stop["id"]] = {"reason": "not_found", "candidates": []}
+                else:
+                    spread = _max_spread_km(cands)
+                    reason = "far_apart" if spread > 2.0 else "multiple"
+                    pending_info[stop["id"]] = {"reason": reason, "candidates": cands}
 
-    valid = [s for s in stops if s["lat"] is not None and s["lon"] is not None]
-    skipped = len(stops) - len(valid)
-    return {"stops": valid, "total": len(stops), "geocoded": geocoded, "skipped": skipped}
+    resolved, pending = [], []
+    for s in stops:
+        if s["id"] in pending_info:
+            info = pending_info[s["id"]]
+            pending.append({**s, "reason": info["reason"], "candidates": info["candidates"]})
+        elif s["lat"] is not None and s["lon"] is not None:
+            resolved.append(s)
+        else:
+            pending.append({**s, "reason": "not_found", "candidates": []})
+
+    untyped = sum(1 for s in stops if s["stop_type"] is None)
+    return {
+        "resolved": resolved,
+        "pending": pending,
+        "total": len(stops),
+        "resolved_count": len(resolved),
+        "pending_count": len(pending),
+        "untyped_count": untyped,
+    }
 
 
 @api_router.post("/route")
@@ -374,7 +444,9 @@ async def compute_route(req: RouteRequest):
         raise HTTPException(400, "Se necesitan al menos 2 puntos")
 
     result = await osrm_route(geo_nodes)
-    service = req.service_time_min * 60 * len(req.stops)
+    service = _service_seconds(req.stops)
+    if service is None:
+        service = req.service_time_min * 60 * len(req.stops)
     return {
         "order": [s.id for s in req.stops],
         "summary": {
@@ -430,7 +502,9 @@ async def optimize(req: OptimizeRequest):
     result = await osrm_route(geo_nodes)
     stop_order = [nodes[i].id for i in order if i in stop_index_set]
 
-    service = req.service_time_min * 60 * n_stops
+    service = _service_seconds(req.stops)
+    if service is None:
+        service = req.service_time_min * 60 * n_stops
     return {
         "order": stop_order,
         "round_trip": close,
@@ -527,12 +601,15 @@ async def delete_route(route_id: str):
 @api_router.post("/export")
 async def export_route(req: RouteRequest):
     rows = []
+    type_label = {"P": "Particular", "PD": "PUDO", "L": "Locker"}
     for i, s in enumerate(req.stops):
         rows.append({
             "Orden": i + 1,
             "ID": s.order_id or s.id,
             "Nombre": s.name,
             "Dirección": s.address,
+            "Tipo": type_label.get(s.stop_type, ""),
+            "Min. parada": s.service_min if s.service_min is not None else "",
             "Latitud": s.lat,
             "Longitud": s.lon,
             "Ventana desde": s.window_from or "",
