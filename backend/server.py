@@ -34,7 +34,7 @@ api_router = APIRouter(prefix="/api")
 
 NOMINATIM = "https://nominatim.openstreetmap.org"
 OSRM = "https://router.project-osrm.org"
-UA = "RouteOptimizer/1.0 (logistics dispatcher tool)"
+UA = "BoxLogic-RouteOptimizer/1.0 (logistics dispatcher; contact: support@boxlogic.app)"
 
 logger = logging.getLogger("route_optimizer")
 logging.basicConfig(level=logging.INFO)
@@ -382,46 +382,86 @@ async def root():
 async def geocode(q: str, limit: int = 6):
     if not q or len(q.strip()) < 3:
         return []
-    params = {"q": q, "format": "jsonv2", "limit": limit, "addressdetails": 1, "countrycodes": "es"}
-    async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as c:
-        r = await c.get(f"{NOMINATIM}/search", params=params)
-        r.raise_for_status()
-        data = r.json()
+    return await geocode_query(q, limit)
+
+
+async def _nominatim_search(c, q, limit):
+    r = await c.get(f"{NOMINATIM}/search", params={"q": q, "format": "jsonv2", "limit": limit, "addressdetails": 1, "countrycodes": "es"})
+    r.raise_for_status()
     return [
-        {
-            "display_name": d.get("display_name"),
-            "lat": float(d["lat"]),
-            "lon": float(d["lon"]),
-            "type": d.get("type"),
-        }
-        for d in data
+        {"display_name": d.get("display_name"), "lat": float(d["lat"]), "lon": float(d["lon"]), "type": d.get("type")}
+        for d in r.json()
     ]
 
 
-async def _geocode_one(c: httpx.AsyncClient, address: str):
+def _photon_name(p):
+    parts = []
+    if p.get("name"):
+        parts.append(p["name"])
+    line = " ".join(x for x in [p.get("street"), p.get("housenumber")] if x)
+    if line:
+        parts.append(line)
+    for k in ("postcode", "city", "state", "country"):
+        if p.get(k):
+            parts.append(str(p[k]))
+    seen, out = set(), []
+    for x in parts:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return ", ".join(out)
+
+
+async def _photon_search(c, q, limit):
+    r = await c.get("https://photon.komoot.io/api/", params={"q": q, "limit": limit, "bbox": "-9.5,35.9,4.4,43.9"})
+    r.raise_for_status()
+    out = []
+    for f in r.json().get("features", []):
+        coord = f.get("geometry", {}).get("coordinates")
+        if not coord or len(coord) < 2:
+            continue
+        props = f.get("properties", {})
+        out.append({"display_name": _photon_name(props), "lat": float(coord[1]), "lon": float(coord[0]), "type": props.get("osm_value")})
+    return out
+
+
+async def geocode_query(q, limit=6):
+    """Geocode with Nominatim, fall back to Photon on failure/429, with Mongo cache."""
+    key = q.strip().lower()
     try:
-        r = await c.get(f"{NOMINATIM}/search", params={"q": address, "format": "jsonv2", "limit": 1, "countrycodes": "es"})
-        r.raise_for_status()
-        data = r.json()
-        if data:
-            return float(data[0]["lat"]), float(data[0]["lon"])
-    except Exception as e:
-        logger.warning(f"geocode fail for {address}: {e}")
+        cached = await db.geocode_cache.find_one({"q": key}, {"_id": 0})
+        if cached and cached.get("results"):
+            return cached["results"][:limit]
+    except Exception:
+        pass
+    results = []
+    async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as c:
+        try:
+            results = await _nominatim_search(c, q, 8)
+        except Exception as e:
+            logger.warning(f"nominatim fail for '{q}': {e}; trying photon")
+        if not results:
+            try:
+                results = await _photon_search(c, q, 8)
+            except Exception as e:
+                logger.warning(f"photon fail for '{q}': {e}")
+    if results:
+        try:
+            await db.geocode_cache.update_one({"q": key}, {"$set": {"q": key, "results": results}}, upsert=True)
+        except Exception:
+            pass
+    return results[:limit]
+
+
+async def _geocode_one(address: str):
+    cands = await geocode_query(address, 1)
+    if cands:
+        return cands[0]["lat"], cands[0]["lon"]
     return None, None
 
 
-async def _geocode_candidates(c: httpx.AsyncClient, address: str):
-    try:
-        r = await c.get(f"{NOMINATIM}/search", params={"q": address, "format": "jsonv2", "limit": 5, "addressdetails": 1, "countrycodes": "es"})
-        r.raise_for_status()
-        data = r.json()
-        return [
-            {"display_name": d.get("display_name"), "lat": float(d["lat"]), "lon": float(d["lon"]), "type": d.get("type")}
-            for d in data
-        ]
-    except Exception as e:
-        logger.warning(f"geocode candidates fail for {address}: {e}")
-        return []
+async def _geocode_candidates(address: str):
+    return await geocode_query(address, 5)
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -518,23 +558,22 @@ async def import_excel(file: UploadFile = File(...)):
         if (stop["lat"] is None or stop["lon"] is None) and stop["address"]:
             to_geocode.append(stop)
 
-    # Geocode missing addresses with candidates (respect Nominatim ~1 req/s)
+    # Geocode missing addresses with candidates (Nominatim -> Photon fallback, cached)
     pending_info = {}
     if to_geocode:
-        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": UA}) as c:
-            for idx, stop in enumerate(to_geocode):
-                if idx > 0:
-                    await asyncio.sleep(1.0)
-                cands = await _geocode_candidates(c, stop["address"])
-                if len(cands) == 1:
-                    stop["lat"] = cands[0]["lat"]
-                    stop["lon"] = cands[0]["lon"]
-                elif len(cands) == 0:
-                    pending_info[stop["id"]] = {"reason": "not_found", "candidates": []}
-                else:
-                    spread = _max_spread_km(cands)
-                    reason = "far_apart" if spread > 2.0 else "multiple"
-                    pending_info[stop["id"]] = {"reason": reason, "candidates": cands}
+        for idx, stop in enumerate(to_geocode):
+            if idx > 0:
+                await asyncio.sleep(1.0)
+            cands = await _geocode_candidates(stop["address"])
+            if len(cands) == 1:
+                stop["lat"] = cands[0]["lat"]
+                stop["lon"] = cands[0]["lon"]
+            elif len(cands) == 0:
+                pending_info[stop["id"]] = {"reason": "not_found", "candidates": []}
+            else:
+                spread = _max_spread_km(cands)
+                reason = "far_apart" if spread > 2.0 else "multiple"
+                pending_info[stop["id"]] = {"reason": reason, "candidates": cands}
 
     resolved, pending = [], []
     for s in stops:
