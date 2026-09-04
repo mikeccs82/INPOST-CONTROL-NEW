@@ -30,3 +30,9 @@
 
 ## APIs externas (sin claves)
 - Nominatim (geocoding), OSRM public server (routing/matrix).
+
+## Dashboard del Conductor (2026-06-04)
+- Nuevo `DriverDashboard.jsx`: primera pantalla tras login del conductor. Rejilla 2 columnas con 5 tarjetas grandes (Ordenar Sacas, Ordenar ruta, Carga del vehículo, Ruta a Reparto, Datos de la ruta) + botón grande rojo "Cerrar sesión" abajo a todo el ancho.
+- `DriverApp.jsx`: estado `screen` ('dashboard' | 'route'). "Ordenar ruta" abre la vista mapa/lista existente; header muestra botón "← Volver" al dashboard.
+- MOCKED "Próximamente" (toast): Ordenar Sacas, Carga del vehículo, Ruta a Reparto, Datos de la ruta.
+- Probado con screenshot (móvil 430px): dashboard, navegación a ruta y vuelta, toasts OK.
