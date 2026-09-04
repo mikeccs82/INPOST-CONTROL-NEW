@@ -3,7 +3,7 @@ import { Toaster, toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Upload, Save, Download, FolderOpen, Route as RouteIcon, Zap,
-  Clock, Ruler, MapPin, Loader2, Timer, Users,
+  Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw,
 } from "lucide-react";
 import { MapView } from "./components/MapView";
 import { StopList } from "./components/StopList";
@@ -106,6 +106,16 @@ function App() {
       toast.error("No se pudo calcular la ruta");
     }
   }, [meta, warehouse.start, endWp]);
+
+  const handleReset = () => {
+    setStops([]);
+    clearRoute();
+    setPendingImport([]);
+    setResolveOpen(false);
+    setUntypedModal({ open: false, count: 0 });
+    setRouteName("");
+    toast.success("Reiniciado");
+  };
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
@@ -322,6 +332,10 @@ function App() {
           <button data-testid="export-btn" onClick={handleExport}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-2 rounded-md transition-colors">
             <Download size={14} /> Exportar
+          </button>
+          <button data-testid="reset-btn" onClick={handleReset}
+            className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-white hover:bg-red-500 bg-red-50 border border-red-200 px-3 py-2 rounded-md transition-colors">
+            <RotateCcw size={14} /> Reiniciar
           </button>
         </div>
       </header>
