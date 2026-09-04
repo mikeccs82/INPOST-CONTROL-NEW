@@ -1,11 +1,12 @@
-import { Package, Route, Truck, Navigation, ClipboardList, LogOut } from "lucide-react";
+import { Package, Route, Truck, Navigation, ClipboardList, MapPin, LogOut } from "lucide-react";
 
 const CARDS = [
-  { key: "sacas", label: "Ordenar Sacas", icon: Package, accent: "#2563EB", soon: true },
-  { key: "route", label: "Ordenar ruta", icon: Route, accent: "#F26A21", soon: false },
-  { key: "carga", label: "Carga del vehículo", icon: Truck, accent: "#2563EB", soon: true },
-  { key: "reparto", label: "Ruta a Reparto", icon: Navigation, accent: "#F26A21", soon: true },
+  { key: "sacas", label: "Ordenar Sacas", step: "Paso 1", icon: Package, accent: "#2563EB", soon: true },
+  { key: "route", label: "Ordenar ruta", step: "Paso 2", icon: Route, accent: "#F26A21", soon: false },
+  { key: "carga", label: "Carga del vehículo", step: "Paso 3", icon: Truck, accent: "#2563EB", soon: true },
+  { key: "reparto", label: "Ruta a Reparto", step: "Paso 4", icon: Navigation, accent: "#F26A21", soon: true },
   { key: "datos", label: "Datos de la ruta", icon: ClipboardList, accent: "#2563EB", soon: true },
+  { key: "paradas", label: "Paradas de la ruta", icon: MapPin, accent: "#F26A21", soon: true },
 ];
 
 export const DriverDashboard = ({ onOpenRoute, onSoon, onLogout }) => {
@@ -39,6 +40,9 @@ export const DriverDashboard = ({ onOpenRoute, onSoon, onLogout }) => {
                   <Icon size={30} style={{ color: c.accent }} />
                 </div>
                 <span className="text-sm sm:text-base font-semibold text-white text-center leading-tight">{c.label}</span>
+                {c.step && (
+                  <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: c.accent }}>({c.step})</span>
+                )}
               </button>
             );
           })}
