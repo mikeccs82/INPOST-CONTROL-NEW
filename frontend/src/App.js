@@ -3,7 +3,7 @@ import { Toaster, toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Upload, Save, Download, FolderOpen, Route as RouteIcon, Zap,
-  Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw,
+  Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw, LogOut, Send,
 } from "lucide-react";
 import { MapView } from "./components/MapView";
 import { StopList } from "./components/StopList";
@@ -13,7 +13,9 @@ import { StopInfoCard } from "./components/StopInfoCard";
 import { UntypedMinutesModal } from "./components/UntypedMinutesModal";
 import { GeocodeResolveDialog } from "./components/GeocodeResolveDialog";
 import { SavedRoutesDialog } from "./components/SavedRoutesDialog";
-import { DriversDialog } from "./components/DriversDialog";
+import { UsersDialog } from "./components/UsersDialog";
+import { ExportNameModal } from "./components/ExportNameModal";
+import { AssignModal } from "./components/AssignModal";
 import {
   importExcel, optimizeRoute, computeRoute, saveRoute, exportRoute,
   getSettings, saveSettings,
@@ -24,7 +26,7 @@ import "./App.css";
 const LOGO = "https://customer-assets-39nsmqrw.emergentagent.net/job_address-mapper-32/artifacts/wu9rybxe_LOGO%20NUEVO%20%282%29.jpeg";
 const genId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
-function App() {
+function App({ user, onLogout }) {
   const [stops, setStops] = useState([]);
   const [geometry, setGeometry] = useState(null);
   const [legs, setLegs] = useState(null);
@@ -36,6 +38,8 @@ function App() {
   const [optimizing, setOptimizing] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [driversOpen, setDriversOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [routeName, setRouteName] = useState("");
   const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceByType: { P: 0, PD: 0, L: 0 }, untypedMin: 0, departureTime: "", respectWindows: true });
   const [pendingImport, setPendingImport] = useState([]);
@@ -268,19 +272,17 @@ function App() {
     }
   };
 
-  const handleExport = async () => {
-    if (stops.length === 0) {
-      toast.error("No hay paradas para exportar");
-      return;
-    }
+  const doExport = async (fname) => {
+    if (stops.length === 0) { toast.error("No hay paradas para exportar"); return; }
     try {
       const blob = await exportRoute(stops);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "ruta_boxlogic.xlsx";
+      a.download = `${fname || "ruta"}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
+      setExportOpen(false);
       toast.success("Exportado a Excel");
     } catch (e) {
       toast.error("Error al exportar");
@@ -308,7 +310,7 @@ function App() {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Toaster theme="dark" position="top-right" richColors />
       {/* Header */}
-      <header className="h-16 shrink-0 bg-white border-b-2 border-[#F26A21] flex items-center justify-between px-4 z-20">
+      <header className="min-h-16 shrink-0 bg-white border-b-2 border-[#F26A21] flex flex-wrap items-center justify-between gap-y-2 px-3 md:px-4 py-2 z-20">
         <div className="flex items-center gap-3">
           <img src={LOGO} alt="BoxLogic" className="h-11 w-auto" data-testid="brand-logo" />
           <div className="hidden sm:block border-l border-slate-200 pl-3">
@@ -329,7 +331,7 @@ function App() {
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-2 rounded-md transition-colors">
             <FolderOpen size={14} /> Rutas
           </button>
-          <button data-testid="export-btn" onClick={handleExport}
+          <button data-testid="export-btn" onClick={() => setExportOpen(true)}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-2 rounded-md transition-colors">
             <Download size={14} /> Exportar
           </button>
@@ -337,12 +339,17 @@ function App() {
             className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-white hover:bg-red-500 bg-red-50 border border-red-200 px-3 py-2 rounded-md transition-colors">
             <RotateCcw size={14} /> Reiniciar
           </button>
+          <span className="hidden md:inline text-xs text-slate-400 font-mono-tech ml-1">{user?.nombres || user?.username}</span>
+          <button data-testid="logout-btn" onClick={onLogout}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-white hover:bg-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-md transition-colors">
+            <LogOut size={14} /> Salir
+          </button>
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className="w-[400px] shrink-0 bg-slate-900 border-r border-slate-700 flex flex-col min-h-0">
+        <aside className="w-full md:w-[400px] md:shrink-0 h-[52vh] md:h-auto bg-slate-900 border-r border-slate-700 flex flex-col min-h-0">
           {/* KPIs */}
           <div className="grid grid-cols-3 gap-px bg-slate-700 border-b border-slate-700">
             <Kpi icon={<MapPin size={14} />} label="Paradas" value={stops.length} />
@@ -410,6 +417,10 @@ function App() {
               {optimizing ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
               {optimizing ? "Optimizando..." : "Optimizar ruta"}
             </motion.button>
+            <button data-testid="assign-btn" onClick={() => setAssignOpen(true)} disabled={stops.length === 0}
+              className="w-full flex items-center justify-center gap-2 bg-[#1E5AA8] hover:bg-[#184a8c] text-white font-bold text-sm py-2.5 rounded-sm transition-colors disabled:opacity-40">
+              <Send size={16} /> Asignar a conductor
+            </button>
           </div>
         </aside>
 
@@ -438,7 +449,20 @@ function App() {
       </div>
 
       <SavedRoutesDialog open={savedOpen} onClose={() => setSavedOpen(false)} onLoad={handleLoad} />
-      <DriversDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
+      <UsersDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
+      <ExportNameModal
+        open={exportOpen}
+        defaultName={`Ruta-02-${new Date().toLocaleDateString("es-ES").replace(/\//g, "-")}`}
+        onConfirm={doExport}
+        onCancel={() => setExportOpen(false)}
+      />
+      <AssignModal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        stops={stops}
+        routeName={routeName}
+        meta={{ metric, start: warehouse.start, end: warehouse.sameAsStart ? null : warehouse.end, round_trip: warehouse.sameAsStart, departure_time: warehouse.departureTime || null }}
+      />
       <UntypedMinutesModal
         open={untypedModal.open}
         count={untypedModal.count}

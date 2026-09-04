@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -12,9 +12,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Any, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 import pandas as pd
+import bcrypt
+import jwt
 
 try:
     from ortools.constraint_solver import routing_enums_pb2, pywrapcp
@@ -882,6 +884,208 @@ async def export_route(req: RouteRequest):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=ruta_optimizada.xlsx"},
     )
+
+
+# ------------------------- Auth / Users / Assignments -------------------------
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    nombres: str = ""
+    apellidos: str = ""
+    dni: str = ""
+    telefono: str = ""
+    marca: str = ""
+    modelo: str = ""
+    anio: str = ""
+    matricula: str = ""
+    cierre_seguridad: bool = False
+    capacidad: str = ""
+    tipologia: str = ""
+    color: str = ""
+
+
+class UserUpdate(BaseModel):
+    password: Optional[str] = None
+    nombres: Optional[str] = None
+    apellidos: Optional[str] = None
+    dni: Optional[str] = None
+    telefono: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[str] = None
+    matricula: Optional[str] = None
+    cierre_seguridad: Optional[bool] = None
+    capacidad: Optional[str] = None
+    tipologia: Optional[str] = None
+    color: Optional[str] = None
+
+
+class AssignmentBody(BaseModel):
+    driver_id: str
+    date: str
+    name: str = ""
+    stops: List[Stop]
+    metric: str = "duration"
+    start: Optional[Waypoint] = None
+    end: Optional[Waypoint] = None
+    round_trip: bool = True
+    departure_time: Optional[str] = None
+
+
+class OrderBody(BaseModel):
+    date: str
+    stops: List[Stop]
+
+
+def create_token(u):
+    payload = {"sub": u["id"], "role": u.get("role", "driver"), "exp": datetime.now(timezone.utc) + timedelta(days=30)}
+    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "No autenticado")
+    try:
+        payload = jwt.decode(authorization[7:], os.environ["JWT_SECRET"], algorithms=["HS256"])
+    except Exception:
+        raise HTTPException(401, "Token inválido")
+    doc = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0, "password_hash": 0})
+    if not doc:
+        raise HTTPException(401, "Usuario no encontrado")
+    return doc
+
+
+async def require_admin(user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "Solo el administrador puede hacer esto")
+    return user
+
+
+def _today():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+@api_router.post("/auth/login")
+async def login(body: LoginBody):
+    u = await db.users.find_one({"username": body.username})
+    if not u or not bcrypt.checkpw(body.password.encode(), u["password_hash"].encode()):
+        raise HTTPException(401, "Usuario o contraseña incorrectos")
+    pub = {k: v for k, v in u.items() if k not in ("_id", "password_hash")}
+    return {"token": create_token(u), "user": pub}
+
+
+@api_router.get("/auth/me")
+async def auth_me(user=Depends(get_current_user)):
+    return user
+
+
+@api_router.get("/users")
+async def list_users(admin=Depends(require_admin)):
+    return await db.users.find({"role": "driver"}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(1000)
+
+
+@api_router.post("/users")
+async def create_user(body: UserCreate, admin=Depends(require_admin)):
+    if await db.users.find_one({"username": body.username}):
+        raise HTTPException(400, "Ese usuario ya existe")
+    doc = body.model_dump()
+    pw = doc.pop("password")
+    doc["password_hash"] = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    doc["id"] = str(uuid.uuid4())
+    doc["role"] = "driver"
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.users.insert_one(doc)
+    return {k: v for k, v in doc.items() if k not in ("_id", "password_hash")}
+
+
+@api_router.put("/users/{uid}")
+async def update_user(uid: str, body: UserUpdate, admin=Depends(require_admin)):
+    if not await db.users.find_one({"id": uid, "role": "driver"}):
+        raise HTTPException(404, "Conductor no encontrado")
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    pw = upd.pop("password", None)
+    if pw:
+        upd["password_hash"] = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    if upd:
+        await db.users.update_one({"id": uid}, {"$set": upd})
+    return await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+
+
+@api_router.delete("/users/{uid}")
+async def delete_user(uid: str, admin=Depends(require_admin)):
+    r = await db.users.delete_one({"id": uid, "role": "driver"})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Conductor no encontrado")
+    return {"ok": True}
+
+
+@api_router.post("/assignments")
+async def create_assignment(body: AssignmentBody, admin=Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    doc = body.model_dump()
+    doc["updated_at"] = now
+    await db.assignments.update_one(
+        {"driver_id": body.driver_id, "date": body.date},
+        {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+        upsert=True,
+    )
+    return await db.assignments.find_one({"driver_id": body.driver_id, "date": body.date}, {"_id": 0})
+
+
+@api_router.get("/assignments")
+async def list_assignments(driver_id: Optional[str] = None, date: Optional[str] = None, admin=Depends(require_admin)):
+    q = {}
+    if driver_id:
+        q["driver_id"] = driver_id
+    if date:
+        q["date"] = date
+    return await db.assignments.find(q, {"_id": 0}).sort("date", -1).to_list(1000)
+
+
+@api_router.get("/my/route")
+async def my_route(date: Optional[str] = None, user=Depends(get_current_user)):
+    d = date or _today()
+    doc = await db.assignments.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    return {"date": d, "today": d == _today(), "assignment": doc}
+
+
+@api_router.get("/my/dates")
+async def my_dates(user=Depends(get_current_user)):
+    return await db.assignments.find({"driver_id": user["id"]}, {"_id": 0, "date": 1, "name": 1}).sort("date", -1).to_list(500)
+
+
+@api_router.put("/my/route/order")
+async def my_order(body: OrderBody, user=Depends(get_current_user)):
+    if body.date != _today():
+        raise HTTPException(403, "Solo puedes editar la ruta de hoy")
+    r = await db.assignments.update_one(
+        {"driver_id": user["id"], "date": body.date},
+        {"$set": {"stops": [s.model_dump() for s in body.stops], "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "No tienes ruta para hoy")
+    return {"ok": True}
+
+
+@app.on_event("startup")
+async def _seed_admin():
+    au = os.environ["ADMIN_USERNAME"]
+    ap = os.environ["ADMIN_PASSWORD"]
+    ex = await db.users.find_one({"username": au})
+    if not ex:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()), "username": au,
+            "password_hash": bcrypt.hashpw(ap.encode(), bcrypt.gensalt()).decode(),
+            "role": "admin", "nombres": "Master", "apellidos": "",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    elif not bcrypt.checkpw(ap.encode(), ex["password_hash"].encode()):
+        await db.users.update_one({"username": au}, {"$set": {"password_hash": bcrypt.hashpw(ap.encode(), bcrypt.gensalt()).decode()}})
 
 
 app.include_router(api_router)

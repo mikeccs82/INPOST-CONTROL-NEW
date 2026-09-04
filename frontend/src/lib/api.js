@@ -5,6 +5,12 @@ export const API = `${BACKEND_URL}/api`;
 
 const client = axios.create({ baseURL: API });
 
+client.interceptors.request.use((cfg) => {
+  const t = localStorage.getItem("token");
+  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  return cfg;
+});
+
 export const importExcel = async (file) => {
   const form = new FormData();
   form.append("file", file);
@@ -58,6 +64,25 @@ export const deleteDriver = async (id) => {
   const { data } = await client.delete(`/drivers/${id}`);
   return data;
 };
+
+// ---- Auth ----
+export const authLogin = async (username, password) => {
+  const { data } = await client.post("/auth/login", { username, password });
+  return data;
+};
+export const authMe = async () => (await client.get("/auth/me")).data;
+
+// ---- Users (conductores) ----
+export const listUsers = async () => (await client.get("/users")).data;
+export const createUser = async (p) => (await client.post("/users", p)).data;
+export const updateUser = async (id, p) => (await client.put(`/users/${id}`, p)).data;
+export const removeUser = async (id) => (await client.delete(`/users/${id}`)).data;
+
+// ---- Assignments ----
+export const createAssignment = async (p) => (await client.post("/assignments", p)).data;
+export const myRoute = async (date) => (await client.get("/my/route", { params: date ? { date } : {} })).data;
+export const myDates = async () => (await client.get("/my/dates")).data;
+export const updateMyOrder = async (date, stops) => (await client.put("/my/route/order", { date, stops })).data;
 
 export const saveRoute = async (payload) => {
   const { data } = await client.post("/routes", payload);
