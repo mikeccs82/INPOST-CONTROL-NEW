@@ -83,6 +83,7 @@ export const createAssignment = async (p) => (await client.post("/assignments", 
 export const myRoute = async (date) => (await client.get("/my/route", { params: date ? { date } : {} })).data;
 export const myDates = async () => (await client.get("/my/dates")).data;
 export const updateMyOrder = async (date, stops) => (await client.put("/my/route/order", { date, stops })).data;
+export const saveStopComment = async (stopId, comment) => (await client.put("/my/route/comment", { stop_id: stopId, comment })).data;
 
 export const saveRoute = async (payload) => {
   const { data } = await client.post("/routes", payload);

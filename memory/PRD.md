@@ -36,3 +36,11 @@
 - `DriverApp.jsx`: estado `screen` ('dashboard' | 'route'). "Ordenar ruta" abre la vista mapa/lista existente; header muestra botón "← Volver" al dashboard.
 - MOCKED "Próximamente" (toast): Ordenar Sacas, Carga del vehículo, Ruta a Reparto, Datos de la ruta.
 - Probado con screenshot (móvil 430px): dashboard, navegación a ruta y vuelta, toasts OK.
+
+## Paradas de la ruta (2026-06-04)
+- Botón "Paradas de la ruta" (sin paso) ahora abre vista informativa `RouteStopsView.jsx` (screen 'paradas' en DriverApp).
+- Muestra por parada: nº de orden, nombre, dirección, ventana horaria, notas del admin.
+- Solo lectura + el conductor puede añadir/editar un COMENTARIO por parada (persiste).
+- Backend: PUT /api/my/route/comment {stop_id, comment} -> guarda stops.$.driver_comment en la asignación de HOY. api.js: saveStopComment().
+- Botones con pasos: Ordenar Sacas (Paso 1), Ordenar ruta (Paso 2), Carga vehículo (Paso 3), Ruta a Reparto (Paso 4). Sin paso: Datos de la ruta, Paradas de la ruta.
+- Probado end-to-end (backend curl + screenshot móvil): guardado y persistencia OK.

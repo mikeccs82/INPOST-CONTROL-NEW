@@ -942,6 +942,11 @@ class OrderBody(BaseModel):
     stops: List[Stop]
 
 
+class CommentBody(BaseModel):
+    stop_id: str
+    comment: str = ""
+
+
 def create_token(u):
     payload = {"sub": u["id"], "role": u.get("role", "driver"), "exp": datetime.now(timezone.utc) + timedelta(days=30)}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
@@ -1069,6 +1074,18 @@ async def my_order(body: OrderBody, user=Depends(get_current_user)):
     )
     if r.matched_count == 0:
         raise HTTPException(404, "No tienes ruta para hoy")
+    return {"ok": True}
+
+
+@api_router.put("/my/route/comment")
+async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
+    d = _today()
+    r = await db.assignments.update_one(
+        {"driver_id": user["id"], "date": d, "stops.id": body.stop_id},
+        {"$set": {"stops.$.driver_comment": body.comment, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Parada no encontrada")
     return {"ok": True}
 
 

@@ -6,11 +6,12 @@ const CARDS = [
   { key: "carga", label: "Carga del vehículo", step: "Paso 3", icon: Truck, accent: "#2563EB", soon: true },
   { key: "reparto", label: "Ruta a Reparto", step: "Paso 4", icon: Navigation, accent: "#F26A21", soon: true },
   { key: "datos", label: "Datos de la ruta", icon: ClipboardList, accent: "#2563EB", soon: true },
-  { key: "paradas", label: "Paradas de la ruta", icon: MapPin, accent: "#F26A21", soon: true },
+  { key: "paradas", label: "Paradas de la ruta", icon: MapPin, accent: "#F26A21", soon: false },
 ];
 
-export const DriverDashboard = ({ onOpenRoute, onSoon, onLogout }) => {
-  const handle = (c) => (c.soon ? onSoon(c.label) : onOpenRoute());
+export const DriverDashboard = ({ onOpenRoute, onOpenParadas, onSoon, onLogout }) => {
+  const action = { route: onOpenRoute, paradas: onOpenParadas };
+  const handle = (c) => (c.soon ? onSoon(c.label) : action[c.key]());
 
   return (
     <div data-testid="driver-dashboard" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">

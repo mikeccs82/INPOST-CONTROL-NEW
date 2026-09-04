@@ -4,6 +4,7 @@ import { LogOut, Truck, Lock, CalendarDays, ArrowLeft } from "lucide-react";
 import { MapView } from "./MapView";
 import { StopList } from "./StopList";
 import { DriverDashboard } from "./DriverDashboard";
+import { RouteStopsView } from "./RouteStopsView";
 import { myRoute, myDates, updateMyOrder, computeRoute } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
@@ -59,7 +60,7 @@ export const DriverApp = ({ user, onLogout }) => {
       <Toaster theme="dark" position="top-center" richColors />
       <header className="h-14 shrink-0 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-3 z-20">
         <div className="flex items-center gap-2 min-w-0">
-          {screen === "route" ? (
+          {screen !== "dashboard" ? (
             <button data-testid="back-to-dashboard" onClick={() => setScreen("dashboard")} className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-md flex items-center justify-center shrink-0 text-slate-200"><ArrowLeft size={17} /></button>
           ) : (
             <div className="w-8 h-8 bg-[#F26A21] rounded-md flex items-center justify-center shrink-0"><Truck size={17} className="text-white" /></div>
@@ -72,13 +73,20 @@ export const DriverApp = ({ user, onLogout }) => {
         <button data-testid="driver-logout" onClick={onLogout} className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-md"><LogOut size={14} /> Salir</button>
       </header>
 
-      {screen === "dashboard" ? (
+      {screen === "dashboard" && (
         <DriverDashboard
           onOpenRoute={() => setScreen("route")}
+          onOpenParadas={() => setScreen("paradas")}
           onSoon={(label) => toast.info(`${label}: Próximamente`)}
           onLogout={onLogout}
         />
-      ) : (
+      )}
+
+      {screen === "paradas" && (
+        <RouteStopsView stops={asg?.stops || []} routeName={asg?.name} />
+      )}
+
+      {screen === "route" && (
         <>
           <div className="shrink-0 bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center gap-2">
             <CalendarDays size={15} className="text-[#F26A21]" />
