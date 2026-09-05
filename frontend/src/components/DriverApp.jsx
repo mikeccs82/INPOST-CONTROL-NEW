@@ -11,6 +11,7 @@ import { CargaOrden } from "./CargaOrden";
 import { CargaLista } from "./CargaLista";
 import { RepartoView } from "./RepartoView";
 import { DayBar } from "./DayBar";
+import { PreCargaModal } from "./PreCargaModal";
 import { myRouteConfig, saveDriverRouteOrder, computeRoute, buildMyRoute, repeatLastSacas } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
@@ -71,6 +72,28 @@ export const DriverApp = ({ user, onLogout }) => {
   };
 
   const [building, setBuilding] = useState(false);
+  const [preCargaOpen, setPreCargaOpen] = useState(false);
+  const [preCargaSaving, setPreCargaSaving] = useState(false);
+
+  const routeStopIds = new Set((driverRoute?.stops || []).map((s) => s.id));
+  const unscannedStops = (allStops || []).filter((s) => !routeStopIds.has(s.id));
+
+  const confirmPreCarga = async (selected) => {
+    setPreCargaSaving(true);
+    try {
+      if (selected.length > 0) {
+        const added = selected.map((s) => ({ ...s, pickup_only: true, added_manual: true }));
+        const next = [...(driverRoute?.stops || []), ...added];
+        await saveDriverRouteOrder(next);
+      }
+      setPreCargaOpen(false);
+      await load();
+      setScreen("carga");
+    } catch (e) {
+      toast.error("No se pudieron añadir las recogidas");
+    } finally { setPreCargaSaving(false); }
+  };
+
   const optimize = async () => {
     if (!rEditable) { toast.error("Los días anteriores son solo lectura"); return; }
     setBuilding(true);
@@ -157,7 +180,7 @@ export const DriverApp = ({ user, onLogout }) => {
                   {building ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} Optimizar
                 </button>
                 {driverRoute && (
-                  <button data-testid="route-next-step" onClick={() => setScreen("carga")}
+                  <button data-testid="route-next-step" onClick={() => setPreCargaOpen(true)}
                     className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-colors">
                     Siguiente <ArrowRight size={14} />
                   </button>
@@ -223,6 +246,15 @@ export const DriverApp = ({ user, onLogout }) => {
             </div>
           )}
         </>
+      )}
+
+      {preCargaOpen && (
+        <PreCargaModal
+          unscanned={unscannedStops}
+          saving={preCargaSaving}
+          onCancel={() => setPreCargaOpen(false)}
+          onConfirm={confirmPreCarga}
+        />
       )}
     </div>
   );

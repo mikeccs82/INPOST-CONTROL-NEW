@@ -16,6 +16,7 @@ export const CargaLista = ({ onFinish }) => {
   const [editable, setEditable] = useState(true);
   const [dates, setDates] = useState([]);
   const [deliveredIds, setDeliveredIds] = useState(() => new Set());
+  const [presetPickup, setPresetPickup] = useState([]);
 
   const load = useCallback((d) => {
     setLoading(true);
@@ -25,12 +26,14 @@ export const CargaLista = ({ onFinish }) => {
         (sc.session?.positions || []).forEach((p) => { if (p.stop_id) posByStop[p.stop_id] = p; });
         const rs = rc.driver_route?.stops || [];
         setStops(rs);
-        const list = rs.map((s, i) => {
+        const loadable = rs.filter((s) => s.pickup_only !== true);
+        setPresetPickup(rs.filter((s) => s.pickup_only === true));
+        const list = loadable.map((s, i) => {
           const p = posByStop[s.id] || {};
           return { id: s.id, parada: i + 1, posicion: p.position ?? null, codigo: s.order_id || "—", sacas: p.sacas ?? 0, bultos: p.bultos ?? 0 };
         }).reverse();
         setItems(list);
-        const valid = new Set(rs.map((s) => s.id));
+        const valid = new Set(loadable.map((s) => s.id));
         setLoaded(new Set((cg.loaded_stop_ids || []).filter((id) => valid.has(id))));
         const del = new Set();
         Object.entries(rp.stops || {}).forEach(([id, p]) => { if (p && p.delivered) del.add(id); });
@@ -172,6 +175,24 @@ export const CargaLista = ({ onFinish }) => {
                 ))}
               </div>
             ))}
+          </div>
+        )}
+
+        {presetPickup.length > 0 && (
+          <div className="mt-4" data-testid="carga-preset-pickup">
+            <h2 className="text-sm font-bold text-green-400 mb-2">Solo recogida añadidas ({presetPickup.length})</h2>
+            <div className="space-y-2">
+              {presetPickup.map((s) => (
+                <div key={s.id} className="bg-green-600/5 border border-green-500/30 rounded-lg p-3 flex items-center gap-3">
+                  <div className="shrink-0 w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center"><Package size={15} /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white truncate">{s.name || s.order_id || "—"}</div>
+                    <div className="text-[11px] text-slate-400 truncate">{s.address}</div>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold uppercase text-green-400">No se carga</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

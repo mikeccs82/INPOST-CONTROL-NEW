@@ -233,3 +233,11 @@
 - Admin: nueva sección "Notificaciones" (card con GLOBO rojo de no leídas, poll 20s vía GET /notifications/unread-count). Al abrir marca todas como leídas (POST /notifications/mark-read). Tabla: Ruta, Tipo de notificación, Conductor, Estado, Corregir.
 - "Corregir" (parada_no_registrada) -> confirm "¿Desea registrar una nueva parada?" -> formulario de 1 parada (nombre, dirección, order_id prefijado con last4, tipo, ventanas) -> POST /route-configs/{cid}/add-stop (geocodifica si falta coord y añade al Excel/stops guardado) -> PUT /notifications/{id}/resolve. Endpoints: GET /notifications, GET /notifications/unread-count, POST /notifications/mark-read, PUT /notifications/{id}/resolve, POST /route-configs/{cid}/add-stop.
 - Verificado por curl (crear notif, unread=1, add-stop geocodifica 36->37, resolve) y UI (badge 1, tabla, ambos modales conductor y modal admin).
+
+## Ventana pre-carga al pulsar Siguiente en Ordenar Ruta (2026-09-05)
+- Al pulsar "Siguiente" en Ordenar Ruta (Paso 2) ahora aparece PreCargaModal (2 pasos):
+  1) Avisos: sacas dejadas en la nave = puntos "solo recogida"; aceptar TODAS las recogidas en la PDA y filtrarlas como solo recogidas; comparar cantidades y verificar diferencias (el conductor compara, la app solo avisa).
+  2) Lista de paradas que NO salieron en Ordenar Sacas (paradas del Excel/ruta que el conductor nunca escaneó = allStops no presentes en driver_route). Cada una con botón toggle Recoger ⇄ Añadido.
+- Al Continuar: las marcadas "Añadido" se añaden a driver_route con pickup_only:true y added_manual:true (vía saveDriverRouteOrder) y se pasa a Carga (Paso 3). Aparecen en Paso 4 como puntos verdes de SOLO RECOGIDA, en la misma sección que las de sobra por capacidad.
+- CargaLista: las paradas con pickup_only===true (preajustadas) NO entran en el checklist de carga (no se pueden cargar), se muestran en bloque "Solo recogida añadidas" y se conservan como pickup_only al finalizar. Las paradas con sacas ordenadas siguen su flujo normal (no se pueden quitar).
+- Verificado en UI (aviso -> lista 32 sin escanear -> toggle Añadido -> Continuar -> Carga) y API (driver_route con 2 pickup_only added_manual).
