@@ -5,6 +5,7 @@ import { MapView } from "./MapView";
 import { StopList } from "./StopList";
 import { DriverDashboard } from "./DriverDashboard";
 import { RouteStopsView } from "./RouteStopsView";
+import { SacasSort } from "./SacasSort";
 import { myRoute, myDates, updateMyOrder, computeRoute } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
@@ -77,10 +78,13 @@ export const DriverApp = ({ user, onLogout }) => {
         <DriverDashboard
           onOpenRoute={() => setScreen("route")}
           onOpenParadas={() => setScreen("paradas")}
+          onOpenSacas={() => setScreen("sacas")}
           onSoon={(label) => toast.info(`${label}: Próximamente`)}
           onLogout={onLogout}
         />
       )}
+
+      {screen === "sacas" && <SacasSort />}
 
       {screen === "paradas" && (
         <RouteStopsView stops={asg?.stops || []} routeName={asg?.name} />

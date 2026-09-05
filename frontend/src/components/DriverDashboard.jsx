@@ -1,7 +1,7 @@
 import { Package, Route, Truck, Navigation, ClipboardList, MapPin, LogOut } from "lucide-react";
 
 const CARDS = [
-  { key: "sacas", label: "Ordenar Sacas", step: "Paso 1", icon: Package, accent: "#2563EB", soon: true },
+  { key: "sacas", label: "Ordenar Sacas", step: "Paso 1", icon: Package, accent: "#2563EB", soon: false },
   { key: "route", label: "Ordenar ruta", step: "Paso 2", icon: Route, accent: "#F26A21", soon: false },
   { key: "carga", label: "Carga del vehículo", step: "Paso 3", icon: Truck, accent: "#2563EB", soon: true },
   { key: "reparto", label: "Ruta a Reparto", step: "Paso 4", icon: Navigation, accent: "#F26A21", soon: true },
@@ -9,8 +9,8 @@ const CARDS = [
   { key: "paradas", label: "Paradas de la ruta", icon: MapPin, accent: "#F26A21", soon: false },
 ];
 
-export const DriverDashboard = ({ onOpenRoute, onOpenParadas, onSoon, onLogout }) => {
-  const action = { route: onOpenRoute, paradas: onOpenParadas };
+export const DriverDashboard = ({ onOpenRoute, onOpenParadas, onOpenSacas, onSoon, onLogout }) => {
+  const action = { route: onOpenRoute, paradas: onOpenParadas, sacas: onOpenSacas };
   const handle = (c) => (c.soon ? onSoon(c.label) : action[c.key]());
 
   return (

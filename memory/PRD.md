@@ -54,3 +54,13 @@
 - Backend: colección route_configs. Endpoints GET/POST/PUT/DELETE /api/route-configs, GET /api/route-configs/{id}, POST /api/route-configs/{id}/stops (Excel). Helper _parse_stops_from_df reutilizado por import-excel. Paradas se guardan SIN optimizar; se geocodifican automáticamente las que no traen coords (mejor candidato).
 - Probado: 91/91 backend pytest (18 nuevos), 100% flujos frontend (testing agent iteration_6). Sin bugs bloqueantes.
 - Pendiente de hablar con el usuario: cómo ve el conductor su ruta desde route_configs (hoy el conductor sigue leyendo la colección `assignments` por fecha; NO está enlazado aún con route_configs).
+
+## Ordenar Sacas (Paso 1 del conductor) (2026-06-05)
+- Botón "Ordenar Sacas" del dashboard del conductor ya activo (screen 'sacas' -> SacasSort.jsx).
+- El conductor dice (voz, Web Speech API es-ES) o escribe los últimos 4 dígitos del ID de orden. Se extraen dígitos y se toman los últimos 4.
+- Lógica: si el nº ya tiene posición -> "Posición X" (añade al mismo montón); si coincide con una parada nueva -> asigna siguiente posición incremental y pregunta Saca/Bulto; si no coincide con ninguna parada -> "Parada no reconocida" -> botón Aislar (lista aparte).
+- Las posiciones se crean en el ORDEN en que el conductor procesa (no el orden de ruta). Muestra resumen: Posición N -> parada -> sacas/bultos, + aisladas.
+- Busca contra las paradas del route_config asignado al conductor (admin). NOTA: no todas las paradas salen cada día; esto identifica cuáles "salieron".
+- Backend: GET /api/my/sacas (devuelve stops del route_config del driver + session), PUT /api/my/sacas (guarda saca_session={positions,isolated} en el route_config). Modelos SacaPosition/SacaIsolated/SacaSessionBody. api.js: mySacas, saveMySacas.
+- Probado: backend curl (GET/PUT/persist) + screenshots móvil (new/existing/unknown/persist). Voz no testeable por screenshot pero usa misma ruta lógica.
+- PENDIENTE (usuario lo definirá): usar las paradas "que salieron" (con posición) en el Paso 2 "Ordenar ruta" para optimizar solo ese subconjunto. Storage ya listo.

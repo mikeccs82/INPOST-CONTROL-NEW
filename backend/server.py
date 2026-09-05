@@ -963,6 +963,26 @@ class SimulationBody(BaseModel):
     summary: Optional[dict] = None
 
 
+class SacaPosition(BaseModel):
+    position: int
+    last4: str
+    stop_id: Optional[str] = None
+    stop_name: str = ""
+    sacas: int = 0
+    bultos: int = 0
+
+
+class SacaIsolated(BaseModel):
+    last4: str
+    sacas: int = 0
+    bultos: int = 0
+
+
+class SacaSessionBody(BaseModel):
+    positions: List[SacaPosition] = []
+    isolated: List[SacaIsolated] = []
+
+
 def create_token(u):
     payload = {"sub": u["id"], "role": u.get("role", "driver"), "exp": datetime.now(timezone.utc) + timedelta(days=30)}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
@@ -1104,6 +1124,30 @@ async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
     )
     if r.matched_count == 0:
         raise HTTPException(404, "Parada no encontrada")
+    return {"ok": True}
+
+
+@api_router.get("/my/sacas")
+async def my_sacas(user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0})
+    if not rc:
+        return {"route_number": None, "stops": [], "session": {"positions": [], "isolated": []}}
+    return {
+        "route_number": rc.get("number"),
+        "stops": rc.get("stops", []),
+        "session": rc.get("saca_session") or {"positions": [], "isolated": []},
+    }
+
+
+@api_router.put("/my/sacas")
+async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]})
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
+    await db.route_configs.update_one(
+        {"id": rc["id"]},
+        {"$set": {"saca_session": body.model_dump(), "saca_updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
     return {"ok": True}
 
 
