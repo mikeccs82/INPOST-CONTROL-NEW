@@ -183,3 +183,19 @@
   - Frontend api.js: myCarga(), saveMyCarga(ids). CargaLista carga myCarga en el mount y restaura el set (filtrando ids que sigan en la ruta). ingresar()/devolver() persisten el set al backend en cada cambio.
   - Al generar nueva ruta NO se borra la carga (se mantiene lo marcado, decisión del usuario).
 - Verificado: curl (PUT/GET persiste) + captura móvil (progreso restaurado 1/4 con la parada ya ingresada tras reentrar en Paso 3).
+
+
+## Asignación desde "Asignación de Ruta" + módulo "Estado rutas" + datos reales (2026-09-05)
+- **Renombrado**: el módulo "Diario Ruta" ahora se llama **"Asignación de Ruta"** (tarjeta admin, título y textos). Mismo componente (DiarioRuta.jsx / colección route_journal), solo cambió el nombre visible.
+- **Asignación del conductor SOLO desde Asignación de Ruta** (cambio arquitectónico pedido por el usuario):
+  - Configuración de rutas (RouteConfigPanel) ya NO asigna conductores; solo define número, activa, hora carga, muelle, salida y paradas (Excel). Se quitó el multiselector de conductores; se muestra nota "la asignación se hace en Asignación de Ruta".
+  - Backend: nuevo helper `_my_config(user, d)` resuelve la ruta del conductor desde `route_journal` (fecha d) en vez de por driver_id/driver_ids en la config. Reemplazado en TODOS los endpoints /my/* (sacas, route-config, build, carga, reparto, location, driver-route/order, comment). Se eliminó el antiguo `_mine` y los fallbacks a rc.driver_route / rc.saca_session.
+  - `_build_day_entries`: ya no auto-asigna conductores desde la config; copia del día laborable anterior (viernes si lunes) o crea líneas sin asignar.
+  - La autorización del conductor (gating `_editable`) ya dependía de tener línea en route_journal HOY. Verificado por curl: driver ve/edita su ruta solo si está asignado.
+- **Nuevo módulo "Estado rutas"** (tarjeta admin `estado`, antes "Próximamente"):
+  - Backend GET `/api/route-status?date=`: por cada línea de route_journal del día devuelve {route_number, conductor, estado, sacas_ordenadas, paradas_confirmadas, paradas_realizadas, total_paradas, entregadas, pct_entregadas, ultima_entrega, ultima_interaccion}. Estado derivado: Sin asignar/Sin empezar/Ordenando sacas/Ruta ordenada/Cargando vehículo/En reparto/Finalizado.
+  - Métricas: sacas_ordenadas=len(saca.positions); paradas_confirmadas=len(carga.loaded_stop_ids); paradas_realizadas=stops con done/delivered/pickedUp/incidencia; pct=entregadas/total_paradas; ultima_entrega=max(deliveredAt) (se añadió `deliveredAt` en RepartoView.onEntregado); ultima_interaccion=max(updated_at de las sesiones).
+  - Frontend EstadoRutas.jsx: tabla estilo Asignación con las columnas pedidas (Ruta, Conductor, Estado actual, Sacas ordenadas, Paradas confirmadas, Paradas realizadas, % entregadas, Última entrega, Última interacción), barra de progreso, badges de estado, selector de fecha, "En vivo" con auto-refresco cada 20 s. Verificado por curl (métricas 3/2/4/50% correctas) y captura.
+- **Transferencia de datos reales de producción → preview** (vía A): script one-shot (ya borrado) que loguea en https://inpost-control.boxlogic.es/api con el admin y descarga vía API e importa al Mongo local: 1 conductor (Mike Stelluti, 1111/1111), 11 rutas (Ruta 8002 con 36 paradas; resto sin paradas), 11 asignaciones de hoy. NO se importó progreso diario (decisión del usuario).
+  - La asignación de la Ruta 8002 en producción apuntaba a un conductor fantasma (id 63d47c88, inexistente). Se remapeó al único conductor real (1111) para que sea usable. Verificado: driver 1111 ve la Ruta 8002 con 36 paradas y editable=True.
+- Pendiente/known: BUG P0 reordenar manual paradas en Paso 2 vía UI (drag no persiste en navegador; backend PUT /my/driver-route/order SÍ persiste). Confirmado con playwright que el drag por teclado no reordenó. No abordado aún (el usuario cambió de prioridades).

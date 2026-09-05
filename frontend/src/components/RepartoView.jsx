@@ -121,7 +121,7 @@ export const RepartoView = () => {
     setProgress(np); setIdx(nextIdx); persist(nextIdx, np); resetLocal();
   };
 
-  const onEntregado = () => { setStopProgress({ delivered: true, deliveredSacas: curMeta.sacas ?? 0, deliveredBultos: curMeta.bultos ?? 0 }); setPickQty(curP.pickupSacas || 0); setMode("recoger"); toast.success("Entrega registrada. Ahora registra la recogida."); };
+  const onEntregado = () => { setStopProgress({ delivered: true, deliveredSacas: curMeta.sacas ?? 0, deliveredBultos: curMeta.bultos ?? 0, deliveredAt: new Date().toISOString() }); setPickQty(curP.pickupSacas || 0); setMode("recoger"); toast.success("Entrega registrada. Ahora registra la recogida."); };
   const onRecogido = () => { setStopProgress({ pickedUp: true, pickupSacas: pickQty }); setMode(null); toast.success(`Recogida registrada: ${pickQty} sacas`); };
 
   // Incidencia en sitio (cerrado)

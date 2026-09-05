@@ -1050,10 +1050,13 @@ def _today():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _mine(user):
-    """Filtro para encontrar la ruta del conductor (soporta 1 o varios conductores por ruta)."""
-    uid = user["id"]
-    return {"$or": [{"driver_id": uid}, {"driver_ids": uid}]}
+async def _my_config(user, d=None):
+    """La ruta del conductor se resuelve desde la Asignación de Ruta (route_journal) de la fecha d."""
+    d = d or _today()
+    entry = await db.route_journal.find_one({"date": d, "driver_id": user["id"]})
+    if not entry or not entry.get("route_config_id"):
+        return None
+    return await db.route_configs.find_one({"id": entry["route_config_id"]}, {"_id": 0})
 
 
 async def _editable(uid, d):
@@ -1081,12 +1084,7 @@ async def _build_day_entries(d, existing_pairs):
     out = []
     for c in configs:
         cid = c.get("id")
-        if cid in prev_by_cfg:
-            drivers = prev_by_cfg[cid]
-        else:
-            drivers = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
-        if not drivers:
-            drivers = [None]
+        drivers = prev_by_cfg.get(cid) or [None]
         for did in drivers:
             if (cid, did) in existing_pairs:
                 continue
@@ -1223,8 +1221,11 @@ async def my_order(body: OrderBody, user=Depends(get_current_user)):
 
 @api_router.put("/my/route/comment")
 async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
+    rc = await _my_config(user, _today())
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
     r = await db.route_configs.update_one(
-        {"driver_id": user["id"], "stops.id": body.stop_id},
+        {"id": rc["id"], "stops.id": body.stop_id},
         {"$set": {"stops.$.driver_comment": body.comment, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     if r.matched_count == 0:
@@ -1234,12 +1235,9 @@ async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
 
 @api_router.get("/my/sacas")
 async def my_sacas(date: Optional[str] = None, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0})
     d = date or _today()
+    rc = await _my_config(user, d)
     doc = await db.saca_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
-    # Migración: si es hoy y no hay sesión diaria pero existe la antigua en route_config, úsala
-    if not doc and d == _today() and rc and rc.get("saca_session"):
-        doc = {**rc["saca_session"], "date": d}
     session = {"positions": (doc or {}).get("positions", []), "isolated": (doc or {}).get("isolated", [])}
     day_docs = await db.saca_day_sessions.find({"driver_id": user["id"]}, {"_id": 0, "date": 1}).to_list(365)
     date_list = sorted({x["date"] for x in day_docs} | {_today()}, reverse=True)
@@ -1256,7 +1254,7 @@ async def my_sacas(date: Optional[str] = None, user=Depends(get_current_user)):
 
 @api_router.put("/my/sacas")
 async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0, "id": 1})
+    rc = await _my_config(user, _today())
     if not rc:
         raise HTTPException(404, "No tienes ruta asignada")
     d = _today()
@@ -1278,13 +1276,10 @@ async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
 
 @api_router.get("/my/route-config")
 async def my_route_config(date: Optional[str] = None, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0})
     d = date or _today()
+    rc = await _my_config(user, d)
     day = await db.route_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
     driver_route = (day or {}).get("driver_route")
-    ids = (rc.get("driver_ids") or ([rc["driver_id"]] if rc.get("driver_id") else [])) if rc else []
-    if not driver_route and d == _today() and rc and len(ids) <= 1:
-        driver_route = rc.get("driver_route")
     return {
         "route_number": rc.get("number") if rc else None,
         "stops": rc.get("stops", []) if rc else [],
@@ -1298,12 +1293,10 @@ async def my_route_config(date: Optional[str] = None, user=Depends(get_current_u
 
 @api_router.post("/my/route/build")
 async def build_my_route(user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user))
+    rc = await _my_config(user, _today())
     if not rc:
         raise HTTPException(404, "No tienes ruta asignada")
     session = await db.saca_day_sessions.find_one({"driver_id": user["id"], "date": _today()}, {"_id": 0})
-    if not session and rc.get("saca_session"):
-        session = rc.get("saca_session")
     session = session or {}
     ids = [p.get("stop_id") for p in (session.get("positions") or []) if p.get("stop_id")]
     stops_by_id = {s["id"]: s for s in rc.get("stops", [])}
@@ -1356,7 +1349,6 @@ async def build_my_route(user=Depends(get_current_user)):
         }},
         upsert=True,
     )
-    await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": driver_route}})
     return {"route_number": rc.get("number"), "driver_route": driver_route}
 
 
@@ -1375,7 +1367,7 @@ async def my_carga(date: Optional[str] = None, user=Depends(get_current_user)):
 
 @api_router.put("/my/carga")
 async def save_my_carga(body: CargaBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0, "id": 1, "number": 1})
+    rc = await _my_config(user, _today())
     d = _today()
     await db.carga_sessions.update_one(
         {"driver_id": user["id"], "date": d},
@@ -1408,7 +1400,7 @@ async def my_reparto(date: Optional[str] = None, user=Depends(get_current_user))
 
 @api_router.put("/my/reparto")
 async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0, "id": 1, "number": 1})
+    rc = await _my_config(user, _today())
     d = _today()
     await db.reparto_sessions.update_one(
         {"driver_id": user["id"], "date": d},
@@ -1428,7 +1420,7 @@ async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
 
 @api_router.post("/my/location")
 async def save_my_location(body: LocationBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user), {"_id": 0, "id": 1, "number": 1})
+    rc = await _my_config(user, _today())
     d = _today()
     stop_name = None
     if body.stop_id and rc:
@@ -1456,10 +1448,10 @@ async def save_my_location(body: LocationBody, user=Depends(get_current_user)):
 
 @api_router.put("/my/driver-route/order")
 async def save_driver_route_order(body: OrderBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one(_mine(user))
+    rc = await _my_config(user, _today())
     d = _today()
     day = await db.route_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
-    dr = (day or {}).get("driver_route") or (rc.get("driver_route") if rc else None)
+    dr = (day or {}).get("driver_route")
     if not dr:
         raise HTTPException(404, "No tienes ruta construida")
     dr["stops"] = [s.model_dump() for s in body.stops]
@@ -1475,8 +1467,6 @@ async def save_driver_route_order(body: OrderBody, user=Depends(get_current_user
         }},
         upsert=True,
     )
-    if rc:
-        await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": dr}})
     return {"ok": True}
 
 
@@ -1676,6 +1666,82 @@ async def load_all_route_journal(date: Optional[str] = None, admin=Depends(requi
     if new_entries:
         await db.route_journal.insert_many([dict(e) for e in new_entries])
     return {"ok": True, "added": len(new_entries)}
+
+
+@api_router.get("/route-status")
+async def route_status(date: Optional[str] = None, admin=Depends(require_admin)):
+    """Estado de ejecución en vivo de cada ruta asignada (para el módulo Estado rutas)."""
+    d = date or _today()
+    entries = await db.route_journal.find({"date": d}, {"_id": 0}).to_list(1000)
+    ids = list({e["driver_id"] for e in entries if e.get("driver_id")})
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "password_hash": 0}).to_list(1000):
+            umap[u["id"]] = u
+
+    def _max(*vals):
+        vals = [v for v in vals if v]
+        return max(vals) if vals else None
+
+    rows = []
+    for e in entries:
+        did = e.get("driver_id")
+        u = umap.get(did)
+        saca = route = carga = reparto = None
+        if did:
+            saca = await db.saca_day_sessions.find_one({"driver_id": did, "date": d}, {"_id": 0})
+            route = await db.route_day_sessions.find_one({"driver_id": did, "date": d}, {"_id": 0})
+            carga = await db.carga_sessions.find_one({"driver_id": did, "date": d}, {"_id": 0})
+            reparto = await db.reparto_sessions.find_one({"driver_id": did, "date": d}, {"_id": 0})
+
+        route_stops = ((route or {}).get("driver_route") or {}).get("stops", []) if route else []
+        total = len(route_stops)
+        sacas_ordenadas = len((saca or {}).get("positions", []))
+        paradas_confirmadas = len((carga or {}).get("loaded_stop_ids", []))
+        rp_stops = (reparto or {}).get("stops", {}) or {}
+        delivered = sum(1 for v in rp_stops.values() if v.get("delivered"))
+        realizadas = sum(1 for v in rp_stops.values() if v.get("done") or v.get("delivered") or v.get("pickedUp") or (v.get("incidencia") or {}).get("tipo"))
+        pct = round(delivered / total * 100) if total else 0
+        delivered_ats = [v.get("deliveredAt") for v in rp_stops.values() if v.get("deliveredAt")]
+        ultima_entrega = max(delivered_ats) if delivered_ats else (reparto.get("updated_at") if (reparto and delivered) else None)
+        ultima_interaccion = _max(
+            (saca or {}).get("updated_at"), (route or {}).get("updated_at"),
+            (carga or {}).get("updated_at"), (reparto or {}).get("updated_at"),
+        )
+
+        if not did:
+            estado = "Sin asignar"
+        elif reparto and total and realizadas >= total:
+            estado = "Finalizado"
+        elif reparto:
+            estado = "En reparto"
+        elif carga:
+            estado = "Cargando vehículo"
+        elif route:
+            estado = "Ruta ordenada"
+        elif saca:
+            estado = "Ordenando sacas"
+        else:
+            estado = "Sin empezar"
+
+        rows.append({
+            "id": e.get("id"),
+            "route_number": e.get("route_number") or "",
+            "conductor": (f"{u.get('nombres','')} {u.get('apellidos','')}".strip() or u.get("username")) if u else None,
+            "estado": estado,
+            "sacas_ordenadas": sacas_ordenadas,
+            "paradas_confirmadas": paradas_confirmadas,
+            "paradas_realizadas": realizadas,
+            "total_paradas": total,
+            "entregadas": delivered,
+            "pct_entregadas": pct,
+            "ultima_entrega": ultima_entrega,
+            "ultima_interaccion": ultima_interaccion,
+        })
+    rows.sort(key=lambda x: str(x.get("route_number") or ""))
+    all_dates = sorted({x["date"] for x in await db.route_journal.find({}, {"_id": 0, "date": 1}).to_list(1000)} | {_today()}, reverse=True)
+    return {"date": d, "today": _today(), "rows": rows, "dates": all_dates}
+
 
 
 @api_router.post("/route-configs/{cid}/simulation")
