@@ -81,7 +81,7 @@ export const CargaLista = ({ onFinish }) => {
             </div>
             <div className="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 flex items-center gap-2 mb-3">
               <Hash size={15} className="text-slate-500 shrink-0" /><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ID orden</span>
-              <span className="ml-auto text-base font-mono-tech font-bold text-white truncate">{current.codigo}</span>
+              <span className="ml-auto text-2xl font-mono-tech font-extrabold text-white truncate">{current.codigo}</span>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="rounded-lg bg-[#F26A21]/10 border border-[#F26A21]/30 p-3 flex items-center gap-2"><ShoppingBag size={20} className="text-[#F26A21]" /><div><div className="text-2xl font-extrabold text-white leading-none">{current.sacas}</div><div className="text-[10px] uppercase tracking-wide text-slate-400">Sacas</div></div></div>
