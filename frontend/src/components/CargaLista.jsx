@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Hash, ShoppingBag, Package, CheckCircle2, Truck, Undo2, ArrowRight, AlertTriangle, X } from "lucide-react";
 import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga } from "../lib/api";
+import { DayBar } from "./DayBar";
 
 export const CargaLista = ({ onFinish }) => {
   const [loading, setLoading] = useState(true);
@@ -10,9 +11,14 @@ export const CargaLista = ({ onFinish }) => {
   const [loaded, setLoaded] = useState(() => new Set());
   const [confirm, setConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [date, setDate] = useState(null);
+  const [todayD, setTodayD] = useState(null);
+  const [editable, setEditable] = useState(true);
+  const [dates, setDates] = useState([]);
 
-  useEffect(() => {
-    Promise.all([myRouteConfig(), mySacas(), myCarga()])
+  const load = useCallback((d) => {
+    setLoading(true);
+    Promise.all([myRouteConfig(d), mySacas(d), myCarga(d)])
       .then(([rc, sc, cg]) => {
         const posByStop = {};
         (sc.session?.positions || []).forEach((p) => { if (p.stop_id) posByStop[p.stop_id] = p; });
@@ -23,35 +29,42 @@ export const CargaLista = ({ onFinish }) => {
           return { id: s.id, parada: i + 1, posicion: p.position ?? null, codigo: s.order_id || "—", sacas: p.sacas ?? 0, bultos: p.bultos ?? 0 };
         }).reverse();
         setItems(list);
-        // Restaurar progreso de carga (solo ids que siguen en la ruta)
         const valid = new Set(rs.map((s) => s.id));
         setLoaded(new Set((cg.loaded_stop_ids || []).filter((id) => valid.has(id))));
+        setDate(cg.date); setTodayD(cg.today); setEditable(!!cg.editable); setDates(cg.dates || []);
       })
       .catch(() => toast.error("No se pudo cargar la lista"))
       .finally(() => setLoading(false));
   }, []);
 
-  const persist = (nextSet) => { saveMyCarga([...nextSet]).catch(() => {}); };
+  useEffect(() => { load(); }, [load]);
+
+  const persist = (nextSet) => { if (editable) saveMyCarga([...nextSet]).catch(() => {}); };
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
   if (items.length === 0) return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-slate-950">
-      <Truck size={40} className="text-slate-600 mb-3" />
-      <p className="text-slate-300 font-semibold mb-1">No hay ruta preparada</p>
-      <p className="text-slate-500 text-sm">Genera tu ruta en "Ordenar Sacas → Siguiente paso".</p>
+    <div className="flex-1 min-h-0 flex flex-col bg-slate-950">
+      <DayBar date={date} today={todayD} editable={editable} dates={dates} onChange={load} />
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        <Truck size={40} className="text-slate-600 mb-3" />
+        <p className="text-slate-300 font-semibold mb-1">No hay ruta preparada</p>
+        <p className="text-slate-500 text-sm">{editable ? 'Genera tu ruta en "Ordenar Sacas → Siguiente paso".' : "Ese día no salió ruta."}</p>
+      </div>
     </div>
   );
 
+  const readOnly = !editable;
   const total = items.length;
   const count = loaded.size;
   const complete = count === total;
   const current = items.find((it) => !loaded.has(it.id));
   const loadedList = items.filter((it) => loaded.has(it.id));
 
-  const ingresar = () => { if (current) setLoaded((s) => { const n = new Set(s); n.add(current.id); persist(n); return n; }); };
-  const devolver = (id) => setLoaded((s) => { const n = new Set(s); n.delete(id); persist(n); return n; });
+  const ingresar = () => { if (readOnly) return; if (current) setLoaded((s) => { const n = new Set(s); n.add(current.id); persist(n); return n; }); };
+  const devolver = (id) => { if (readOnly) return; setLoaded((s) => { const n = new Set(s); n.delete(id); persist(n); return n; }); };
 
   const proceed = async () => {
+    if (readOnly) return;
     setSaving(true);
     try {
       const ordered = stops.filter((s) => loaded.has(s.id));   // solo las cargadas, en orden de reparto
@@ -63,7 +76,9 @@ export const CargaLista = ({ onFinish }) => {
   };
 
   return (
-    <div data-testid="carga-lista-view" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
+    <div className="flex-1 min-h-0 flex flex-col bg-slate-950">
+      <DayBar date={date} today={todayD} editable={editable} dates={dates} onChange={load} />
+      <div data-testid="carga-lista-view" className="flex-1 min-h-0 overflow-y-auto thin-scroll p-4">
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-bold text-white">Carga al furgón</h1>
@@ -92,10 +107,12 @@ export const CargaLista = ({ onFinish }) => {
               <div className="rounded-lg bg-[#F26A21]/10 border border-[#F26A21]/30 p-3 flex items-center gap-2"><ShoppingBag size={20} className="text-[#F26A21]" /><div><div className="text-2xl font-extrabold text-white leading-none">{current.sacas}</div><div className="text-[10px] uppercase tracking-wide text-slate-400">Sacas</div></div></div>
               <div className="rounded-lg bg-[#1E5AA8]/10 border border-[#1E5AA8]/30 p-3 flex items-center gap-2"><Package size={20} className="text-[#4b8fe0]" /><div><div className="text-2xl font-extrabold text-white leading-none">{current.bultos}</div><div className="text-[10px] uppercase tracking-wide text-slate-400">Bultos</div></div></div>
             </div>
+            {!readOnly && (
             <button data-testid="carga-lista-ingresado" onClick={ingresar}
               className="w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-lg py-5 rounded-2xl transition-colors active:scale-[0.98] shadow-lg shadow-emerald-900/40">
               <CheckCircle2 size={26} /> Ingresado al furgón
             </button>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl bg-emerald-600/10 border border-emerald-500/30 p-5 mb-3 text-center">
@@ -110,7 +127,7 @@ export const CargaLista = ({ onFinish }) => {
             <span className="text-xs text-slate-400">Paradas subidas</span>
             <span className="text-sm font-mono-tech font-bold text-white">{count} / {total}</span>
           </div>
-          {complete ? (
+          {readOnly ? null : complete ? (
             <button data-testid="carga-lista-siguiente" onClick={proceed} disabled={saving}
               className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-50">
               {saving ? <Loader2 size={18} className="animate-spin" /> : <>Siguiente <ArrowRight size={18} /></>}
@@ -136,10 +153,12 @@ export const CargaLista = ({ onFinish }) => {
                   <div className="text-xs text-slate-300 font-mono-tech truncate">Pos {it.posicion ?? "—"} · {it.codigo}</div>
                   <div className="text-[11px] text-slate-500">{it.sacas} sacas · {it.bultos} bultos</div>
                 </div>
+                {!readOnly && (
                 <button data-testid={`carga-devolver-${it.parada}`} onClick={() => devolver(it.id)}
                   className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-white hover:bg-amber-600 border border-amber-500/40 px-2 py-1.5 rounded-md transition-colors">
                   <Undo2 size={13} /> Devolver a nave
                 </button>
+                )}
               </div>
             ))}
           </div>
@@ -167,6 +186,7 @@ export const CargaLista = ({ onFinish }) => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

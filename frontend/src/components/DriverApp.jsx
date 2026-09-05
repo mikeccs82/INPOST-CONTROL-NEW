@@ -10,6 +10,7 @@ import { CargaVehiculo } from "./CargaVehiculo";
 import { CargaOrden } from "./CargaOrden";
 import { CargaLista } from "./CargaLista";
 import { RepartoView } from "./RepartoView";
+import { DayBar } from "./DayBar";
 import { myRouteConfig, saveDriverRouteOrder, computeRoute } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
@@ -25,6 +26,10 @@ export const DriverApp = ({ user, onLogout }) => {
   const [selectedId, setSelectedId] = useState(null);
   const [screen, setScreen] = useState("dashboard");
   const [routeLoading, setRouteLoading] = useState(true);
+  const [rDate, setRDate] = useState(null);
+  const [rToday, setRToday] = useState(null);
+  const [rEditable, setREditable] = useState(true);
+  const [rDates, setRDates] = useState([]);
 
   const metaOf = (r) => ({ start: r?.start || null, end: r?.end || null, round_trip: r?.round_trip ?? true, departure_time: r?.departure_time || null });
 
@@ -35,16 +40,18 @@ export const DriverApp = ({ user, onLogout }) => {
     catch (e) { /* ignore */ }
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (d) => {
     setRouteLoading(true);
     try {
-      const r = await myRouteConfig();
+      const r = await myRouteConfig(d);
       setRouteNumber(r.route_number);
       setAllStops(r.stops || []);
       setDriverRoute(r.driver_route || null);
       const sts = (r.driver_route?.stops || []).map((s) => ({ ...s }));
       setStops(sts);
+      setRDate(r.date); setRToday(r.today); setREditable(!!r.editable); setRDates(r.dates || []);
       if (r.driver_route) draw(sts, r.driver_route);
+      else { setGeometry(null); setLegs(null); setSummary(null); }
     } catch (e) { toast.error("No se pudo cargar tu ruta"); }
     finally { setRouteLoading(false); }
   }, [draw]);
@@ -54,6 +61,7 @@ export const DriverApp = ({ user, onLogout }) => {
   const openRoute = () => { load(); setScreen("route"); };
 
   const reorder = async (from, to) => {
+    if (!rEditable) { toast.error("Los días anteriores son solo lectura"); return; }
     const next = [...stops];
     const [m] = next.splice(from, 1);
     next.splice(to, 0, m);
@@ -108,17 +116,23 @@ export const DriverApp = ({ user, onLogout }) => {
 
       {screen === "route" && (
         <>
+          <DayBar date={rDate} today={rToday} editable={rEditable} dates={rDates} onChange={load} />
           <div className="shrink-0 bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center gap-2">
             <PackageCheck size={15} className="text-[#F26A21]" />
             <span className="text-xs text-slate-300">{stops.length} paradas ordenadas</span>
             {summary && <span className="text-[11px] font-mono-tech text-slate-300">{fmtDistance(summary.distance)} · {fmtDuration(summary.duration)}</span>}
-            {driverRoute && (
+            {driverRoute && rEditable && (
               <button data-testid="route-next-step" onClick={() => setScreen("carga")}
                 className="ml-auto flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-colors">
                 Siguiente <ArrowRight size={14} />
               </button>
             )}
           </div>
+          {!rEditable && (
+            <div className="shrink-0 bg-slate-800/60 border-b border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 flex items-center gap-1.5">
+              Estás viendo un día anterior · no se puede reordenar
+            </div>
+          )}
 
           {routeLoading ? (
             <div className="flex-1 flex items-center justify-center bg-slate-950">

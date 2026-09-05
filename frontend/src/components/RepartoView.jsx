@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Navigation, PackageCheck, Flag, CheckCircle2, PackageOpen, PackagePlus, ArrowRight, ShoppingBag, Package, Minus, Plus, AlertTriangle, Clock, X, DoorClosed } from "lucide-react";
 import { myRouteConfig, mySacas, myReparto, saveMyReparto } from "../lib/api";
+import { DayBar } from "./DayBar";
 
 const gmapsUrl = (s) => {
   if (s.lat != null && s.lon != null) return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=driving`;
@@ -35,8 +36,18 @@ export const RepartoView = () => {
   const [endModal, setEndModal] = useState(false);      // "¿hubo alguna incidencia?" al terminar
   const [endDetail, setEndDetail] = useState(null);     // string | null -> textarea de detalle final
 
-  useEffect(() => {
-    Promise.all([myRouteConfig(), mySacas(), myReparto()])
+  const [date, setDate] = useState(null);
+  const [todayD, setTodayD] = useState(null);
+  const [editable, setEditable] = useState(true);
+  const [dates, setDates] = useState([]);
+
+  const resetLocal = () => { setAtSite(false); setMode(null); setPickQty(0); setIncModal(false); setDefDetail(null); setEndModal(false); setEndDetail(null); };
+
+  const load = useCallback((d) => {
+    setLoading(true);
+    resetLocal();
+    setSelectedId(null);
+    Promise.all([myRouteConfig(d), mySacas(d), myReparto(d)])
       .then(([rc, sc, rp]) => {
         setRouteNumber(rc.route_number);
         setStops(rc.driver_route?.stops || []);
@@ -46,28 +57,37 @@ export const RepartoView = () => {
         setMeta(m);
         setIdx(rp.idx || 0);
         setProgress(rp.stops || {});
+        setDate(rp.date);
+        setTodayD(rp.today);
+        setEditable(!!rp.editable);
+        setDates(rp.dates || []);
       })
       .catch(() => toast.error("No se pudo cargar la ruta"))
       .finally(() => setLoading(false));
   }, []);
 
-  const persist = (nextIdx, nextProgress) => { saveMyReparto(nextIdx, nextProgress).catch(() => {}); };
-  const resetLocal = () => { setAtSite(false); setMode(null); setPickQty(0); setIncModal(false); setDefDetail(null); setEndModal(false); setEndDetail(null); };
+  useEffect(() => { load(); }, [load]);
+
+  const persist = (nextIdx, nextProgress) => { if (editable) saveMyReparto(nextIdx, nextProgress).catch(() => {}); };
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
 
   if (stops.length === 0) return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-slate-950">
-      <PackageCheck size={40} className="text-slate-600 mb-3" />
-      <p className="text-slate-300 font-semibold mb-1">No hay ruta preparada</p>
-      <p className="text-slate-500 text-sm">Prepara y carga tu ruta en los pasos anteriores.</p>
+    <div className="flex-1 min-h-0 flex flex-col bg-slate-950">
+      <DayBar date={date} today={todayD} editable={editable} dates={dates} onChange={load} />
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        <PackageCheck size={40} className="text-slate-600 mb-3" />
+        <p className="text-slate-300 font-semibold mb-1">No hay ruta preparada</p>
+        <p className="text-slate-500 text-sm">{readOnly ? "Ese día no salió ruta." : "Prepara y carga tu ruta en los pasos anteriores."}</p>
+      </div>
     </div>
   );
 
   const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.incidencia?.tipo === "definitivo"); };
   const pending = stops.filter((s) => !isDone(s));
   const finished = stops.length > 0 && pending.length === 0;
-  const cur = (idx < stops.length && !isDone(stops[idx])) ? stops[idx] : null;
+  const readOnly = !editable;
+  const cur = (!readOnly && idx < stops.length && !isDone(stops[idx])) ? stops[idx] : null;
   const curMeta = cur ? (meta[cur.id] || {}) : {};
   const curP = cur ? (progress[cur.id] || {}) : {};
   const onsite = atSite || !!(curP.delivered || curP.pickedUp || curP.incidencia);
@@ -112,7 +132,9 @@ export const RepartoView = () => {
   };
 
   return (
-    <div data-testid="reparto-view" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
+    <div className="flex-1 min-h-0 flex flex-col bg-slate-950">
+      <DayBar date={date} today={todayD} editable={editable} dates={dates} onChange={load} />
+      <div data-testid="reparto-view" className="flex-1 min-h-0 overflow-y-auto thin-scroll p-4">
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-bold text-white">Ruta a Reparto</h1>
@@ -125,7 +147,7 @@ export const RepartoView = () => {
             <Flag size={34} className="text-emerald-400 mx-auto mb-2" />
             <p className="text-white font-bold text-lg">¡Ruta completada!</p>
             <p className="text-slate-400 text-sm mt-1 mb-4">Has visitado todas las paradas.</p>
-            {nave && (
+            {nave && editable && (
               <button data-testid="reparto-ir-nave" onClick={() => irA(nave)}
                 className="w-full flex items-center justify-center gap-2.5 bg-[#F26A21] hover:bg-[#f58220] text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98] shadow-lg shadow-orange-900/30">
                 <Navigation size={24} /> Ir a la nave
@@ -135,8 +157,8 @@ export const RepartoView = () => {
         ) : !cur ? (
           <div data-testid="reparto-pending" className="rounded-2xl bg-amber-500/10 border border-amber-500/40 p-5 mb-4 text-center">
             <Clock size={30} className="text-amber-400 mx-auto mb-2" />
-            <p className="text-white font-bold">Tienes {pending.length} parada{pending.length > 1 ? "s" : ""} pendiente{pending.length > 1 ? "s" : ""}</p>
-            <p className="text-slate-300 text-sm mt-1">Selecciónala{pending.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla{pending.length > 1 ? "s" : ""}.</p>
+            <p className="text-white font-bold">{readOnly ? `${pending.length} parada${pending.length > 1 ? "s" : ""} sin completar` : `Tienes ${pending.length} parada${pending.length > 1 ? "s" : ""} pendiente${pending.length > 1 ? "s" : ""}`}</p>
+            <p className="text-slate-300 text-sm mt-1">{readOnly ? "Resumen del día (solo lectura)." : `Selecciónala${pending.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla${pending.length > 1 ? "s" : ""}.`}</p>
           </div>
         ) : (
           <div data-testid="reparto-current" className="rounded-2xl bg-slate-900 border border-[#F26A21]/40 p-4 mb-4">
@@ -247,8 +269,8 @@ export const RepartoView = () => {
             const w = fmtWindow(s);
             return (
               <div key={s.id} className={`rounded-xl border transition-colors ${sel && !done ? "border-[#F26A21]" : isCur ? "border-[#F26A21]/40" : "border-slate-700"} ${isCur ? "bg-[#F26A21]/10" : done ? "bg-slate-900/50" : "bg-slate-900"}`}>
-                <button data-testid={`reparto-stop-${i + 1}`} onClick={() => { if (!done) setSelectedId(sel ? null : s.id); }}
-                  className={`w-full text-left p-3 flex items-center gap-3 ${done ? "cursor-default" : ""}`}>
+                <button data-testid={`reparto-stop-${i + 1}`} onClick={() => { if (!done && !readOnly) setSelectedId(sel ? null : s.id); }}
+                  className={`w-full text-left p-3 flex items-center gap-3 ${done || readOnly ? "cursor-default" : ""}`}>
                   <div className={`shrink-0 w-9 h-9 rounded-full font-bold flex items-center justify-center ${done ? "bg-emerald-600 text-white" : isCur ? "bg-[#F26A21] text-white" : "bg-slate-800 border border-slate-600 text-white"}`}>
                     {done ? <CheckCircle2 size={18} /> : i + 1}
                   </div>
@@ -260,7 +282,7 @@ export const RepartoView = () => {
                   {badge && <span className={`text-[10px] font-bold uppercase shrink-0 ${badge.c}`}>{badge.t}</span>}
                   {isCur && !badge && <span className="text-[10px] font-bold uppercase text-[#F26A21] shrink-0">Actual</span>}
                 </button>
-                {sel && !done && (
+                {sel && !done && !readOnly && (
                   <div className="px-3 pb-3 space-y-2">
                     <button data-testid={`reparto-ir-list-${i + 1}`} onClick={() => irA(s)}
                       className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
@@ -341,6 +363,7 @@ export const RepartoView = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

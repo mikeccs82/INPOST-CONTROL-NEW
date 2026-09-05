@@ -1024,6 +1024,17 @@ def _today():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+async def _driver_days(driver_id):
+    dates = set()
+    for coll in (db.saca_day_sessions, db.route_day_sessions, db.carga_sessions, db.reparto_sessions):
+        docs = await coll.find({"driver_id": driver_id}, {"_id": 0, "date": 1}).to_list(500)
+        for x in docs:
+            if x.get("date"):
+                dates.add(x["date"])
+    dates.add(_today())
+    return sorted(dates, reverse=True)
+
+
 @api_router.post("/auth/login")
 async def login(body: LoginBody):
     u = await db.users.find_one({"username": body.username})
@@ -1184,11 +1195,22 @@ async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
 
 
 @api_router.get("/my/route-config")
-async def my_route_config(user=Depends(get_current_user)):
+async def my_route_config(date: Optional[str] = None, user=Depends(get_current_user)):
     rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0})
-    if not rc:
-        return {"route_number": None, "stops": [], "driver_route": None}
-    return {"route_number": rc.get("number"), "stops": rc.get("stops", []), "driver_route": rc.get("driver_route")}
+    d = date or _today()
+    day = await db.route_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    driver_route = (day or {}).get("driver_route")
+    if not driver_route and d == _today() and rc:
+        driver_route = rc.get("driver_route")
+    return {
+        "route_number": rc.get("number") if rc else None,
+        "stops": rc.get("stops", []) if rc else [],
+        "driver_route": driver_route,
+        "date": d,
+        "today": _today(),
+        "editable": d == _today(),
+        "dates": await _driver_days(user["id"]),
+    }
 
 
 @api_router.post("/my/route/build")
@@ -1239,15 +1261,33 @@ async def build_my_route(user=Depends(get_current_user)):
         "summary": res["summary"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    await db.route_day_sessions.update_one(
+        {"driver_id": user["id"], "date": _today()},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": _today(),
+            "route_config_id": rc["id"],
+            "route_number": rc.get("number"),
+            "driver_route": driver_route,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
     await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": driver_route}})
     return {"route_number": rc.get("number"), "driver_route": driver_route}
 
 
 @api_router.get("/my/carga")
-async def my_carga(user=Depends(get_current_user)):
-    d = _today()
+async def my_carga(date: Optional[str] = None, user=Depends(get_current_user)):
+    d = date or _today()
     doc = await db.carga_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
-    return {"date": d, "loaded_stop_ids": (doc or {}).get("loaded_stop_ids", [])}
+    return {
+        "date": d,
+        "today": _today(),
+        "editable": d == _today(),
+        "dates": await _driver_days(user["id"]),
+        "loaded_stop_ids": (doc or {}).get("loaded_stop_ids", []),
+    }
 
 
 @api_router.put("/my/carga")
@@ -1270,10 +1310,17 @@ async def save_my_carga(body: CargaBody, user=Depends(get_current_user)):
 
 
 @api_router.get("/my/reparto")
-async def my_reparto(user=Depends(get_current_user)):
-    d = _today()
+async def my_reparto(date: Optional[str] = None, user=Depends(get_current_user)):
+    d = date or _today()
     doc = await db.reparto_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
-    return {"date": d, "idx": (doc or {}).get("idx", 0), "stops": (doc or {}).get("stops", {})}
+    return {
+        "date": d,
+        "today": _today(),
+        "editable": d == _today(),
+        "dates": await _driver_days(user["id"]),
+        "idx": (doc or {}).get("idx", 0),
+        "stops": (doc or {}).get("stops", {}),
+    }
 
 
 @api_router.put("/my/reparto")
@@ -1299,12 +1346,26 @@ async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
 @api_router.put("/my/driver-route/order")
 async def save_driver_route_order(body: OrderBody, user=Depends(get_current_user)):
     rc = await db.route_configs.find_one({"driver_id": user["id"]})
-    if not rc or not rc.get("driver_route"):
+    d = _today()
+    day = await db.route_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    dr = (day or {}).get("driver_route") or (rc.get("driver_route") if rc else None)
+    if not dr:
         raise HTTPException(404, "No tienes ruta construida")
-    dr = rc["driver_route"]
     dr["stops"] = [s.model_dump() for s in body.stops]
     dr["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": dr}})
+    await db.route_day_sessions.update_one(
+        {"driver_id": user["id"], "date": d},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": d,
+            "route_config_id": rc["id"] if rc else None,
+            "driver_route": dr,
+            "updated_at": dr["updated_at"],
+        }},
+        upsert=True,
+    )
+    if rc:
+        await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": dr}})
     return {"ok": True}
 
 

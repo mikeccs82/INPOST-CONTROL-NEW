@@ -152,7 +152,12 @@
 - LISTA SELECCIONABLE: cada parada de la lista es pulsable; al seleccionarla despliega su botón "Ir con Google Maps". Badges por estado (Actual/Hecha/Vuelvo/Cerrado).
 - Verificado: curl (GET/PUT persiste) + captura (flujo completo entregar/recoger, modal incidencia sí->detalle, recarga mantiene 3/3, lista Ir).
 
-## Reparto: lista con 2 botones + entregar/recoger re-pulsables (2026-06-09)
+## Historial por día en Ordenar ruta, Carga y Reparto (2026-06-09)
+- Extendida la lógica "por día" (como Ordenar Sacas) a los 3 pasos restantes. Barra de fecha (DayBar.jsx) arriba con selector de días anteriores; días pasados en SOLO LECTURA (no modificables).
+- Backend: nuevas/actualizadas colecciones por día. `route_day_sessions` (driver_route por driver+fecha). GET /my/route-config, /my/carga, /my/reparto aceptan ?date= y devuelven {date, today, editable, dates}. `_driver_days()` une fechas de saca/route/carga/reparto. build y driver-route/order escriben en route_day_sessions[hoy] (+ route_config para compat). PUT carga/reparto siguen escribiendo solo en hoy.
+- Frontend: DriverApp (Ordenar ruta) + CargaLista + RepartoView usan DayBar y cargan por fecha; en solo lectura se ocultan/inhabilitan reordenar, ingresar/devolver, y las acciones de reparto (Ir/Ya estoy/entregar/recoger).
+- Datos de prueba sembrados (scripts/seed_past_days.py) para el conductor 1122: 2 días anteriores que salieron a ruta — 2026-09-03 (completo) y 2026-09-04 (con incidencias: vuelvo, cerrado definitivo, y una entrega con problema).
+- Verificado por curl (editable/dates por fecha) y capturas (los 3 pasos en día pasado, solo lectura).
 - Lista "Todas las paradas": al seleccionar una parada aparecen 2 botones: "Ir con Google Maps" y "Ya estoy en el sitio" (este último hace esa parada la actual y entra en modo en-sitio).
 - FIX reporte usuario ("al volver a una parada no me deja entregar/recoger"): los botones Entregar/Recoger ya NO se deshabilitan cuando están hechos; muestran "Entregado ✓" / "Recogido ✓ (N)" pero siguen pulsables para corregir/re-registrar. La causa del reporte era estado previo (parada ya servida) que bloqueaba los botones.
 - Verificado por captura.
