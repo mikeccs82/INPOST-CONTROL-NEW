@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
+import json
 import logging
 import math
 import asyncio
@@ -1503,6 +1504,38 @@ async def _seed_admin():
         })
     elif not bcrypt.checkpw(ap.encode(), ex["password_hash"].encode()):
         await db.users.update_one({"username": au}, {"$set": {"password_hash": bcrypt.hashpw(ap.encode(), bcrypt.gensalt()).decode()}})
+
+
+@app.on_event("startup")
+async def _seed_initial_data():
+    """Carga inicial de datos (una sola vez por base de datos).
+    Controlado por bandera en seed_flags para que futuros despliegues NO sobrescriban datos."""
+    SEED_KEY = "initial_seed_v1"
+    if await db.seed_flags.find_one({"key": SEED_KEY}):
+        return
+    seed_path = ROOT_DIR / "seed_data.json"
+    if not seed_path.exists():
+        return
+    try:
+        data = json.loads(seed_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error(f"No se pudo leer seed_data.json: {e}")
+        return
+    key_fields = {
+        "users": ["username"],
+        "route_configs": ["id"],
+        "saca_day_sessions": ["driver_id", "date"],
+        "route_day_sessions": ["driver_id", "date"],
+        "carga_sessions": ["driver_id", "date"],
+        "reparto_sessions": ["driver_id", "date"],
+    }
+    for coll, docs in data.items():
+        keys = key_fields.get(coll, ["id"])
+        for doc in docs:
+            flt = {k: doc.get(k) for k in keys}
+            await db[coll].update_one(flt, {"$set": doc}, upsert=True)
+    await db.seed_flags.insert_one({"key": SEED_KEY, "done_at": datetime.now(timezone.utc).isoformat()})
+    logger.info(f"Seed inicial '{SEED_KEY}' aplicado.")
 
 
 app.include_router(api_router)
