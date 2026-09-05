@@ -248,7 +248,7 @@ export const SacasSort = ({ onNext }) => {
           </button>
           {showHelp && (
             <div className="px-3 pb-3">
-              <img src="/saca-ejemplo.jpg" alt="Ejemplo de etiqueta de saca" className="w-full rounded-lg border border-slate-700 mb-3" />
+              <img src="/saca-ejemplo.jpg?v=2" alt="Ejemplo de etiqueta de saca" className="w-full rounded-lg border border-slate-700 mb-3" />
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2 rounded-lg bg-slate-900 border border-slate-700 p-2.5">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-[#F26A21] text-white text-xs font-bold flex items-center justify-center">1</span>
