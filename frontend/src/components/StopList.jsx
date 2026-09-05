@@ -67,9 +67,11 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                         <div className="text-sm font-semibold text-white truncate" title={s.name}>{s.name || "Parada"}</div>
                         {s.address && <div className="text-xs text-slate-400 truncate" title={s.address}>{s.address}</div>}
                         <div className="flex items-center gap-3 mt-1">
-                          <span className="text-[10px] font-mono-tech text-slate-400">
-                            {Number(s.lat).toFixed(4)}, {Number(s.lon).toFixed(4)}
-                          </span>
+                          {!readOnlyMeta && (
+                            <span className="text-[10px] font-mono-tech text-slate-400">
+                              {Number(s.lat).toFixed(4)}, {Number(s.lon).toFixed(4)}
+                            </span>
+                          )}
                           {readOnlyMeta ? (
                             s.stop_type && (
                               <span data-testid={`stop-type-${index}`} className="ml-auto text-[10px] font-bold uppercase bg-slate-700/60 border border-slate-600 text-slate-200 rounded px-1.5 py-0.5">
