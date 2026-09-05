@@ -143,6 +143,14 @@
 - Recoger: contador +/- para "¿cuántas sacas recoges?" + botón "Recogido (N)".
 - Lista inferior con estado por parada (Hecha/Actual/pendiente). Al pulsar "Siguiente parada" avanza; al final "¡Ruta completada!".
 - SOLO frontend por ahora (sin persistencia). Pendiente: el usuario comentará variaciones. Verificado por captura (Ir->en sitio->entregar 1/0->entregado->recoger 2->recogido).
+
+## Reparto: memorizado + incidencias + horarios + lista seleccionable (2026-06-09)
+- PERSISTENCIA: nueva colección `reparto_sessions` (diario por conductor+fecha). Backend GET/PUT /api/my/reparto {idx, stops:{stop_id:{delivered,deliveredSacas,deliveredBultos,pickedUp,pickupSacas,incidencia:{tipo,detalle},done}}}. Modelo RepartoBody(idx:int, stops:Dict). api.js: myReparto(), saveMyReparto(idx, stops). RepartoView carga en mount y persiste en cada acción -> sobrevive recarga.
+- INCIDENCIA EN SITIO: al pulsar "Ya estoy en el sitio", entre "Entregar/Recoger" (arriba) y "Siguiente parada" (abajo) hay botón "Incidencia" -> modal con 2 opciones: (1) "Cerrado, vuelvo más tarde" (marca vuelvo y avanza, parada NO hecha, badge VUELVO); (2) "Cerrado definitivo" -> pide detalle en textarea -> guarda y avanza (badge Cerrado).
+- INCIDENCIA AL TERMINAR: si se hizo entrega o recogida, "Siguiente parada" abre modal "¿Hubo alguna incidencia?" -> No (continúa) / Sí (caja de detalle -> guardar y continuar).
+- HORARIOS: cada tarjeta (actual y lista) muestra la ventana horaria (window_from - window_to) entre el nombre y la dirección con icono reloj.
+- LISTA SELECCIONABLE: cada parada de la lista es pulsable; al seleccionarla despliega su botón "Ir con Google Maps". Badges por estado (Actual/Hecha/Vuelvo/Cerrado).
+- Verificado: curl (GET/PUT persiste) + captura (flujo completo entregar/recoger, modal incidencia sí->detalle, recarga mantiene 3/3, lista Ir).
 - BUG usuario: "no se está memorizando la carga del vehículo". El set `loaded` de CargaLista vivía solo en estado local; al recargar/volver se perdía el progreso.
 - FIX: nueva colección independiente `carga_sessions` (diario por conductor+fecha) para registrar qué paradas ya se ingresaron al furgón.
   - Backend: GET /api/my/carga (devuelve {date, loaded_stop_ids} del día) y PUT /api/my/carga (upsert por driver_id+date con loaded_stop_ids, route_config_id, route_number, updated_at). Modelo CargaBody.

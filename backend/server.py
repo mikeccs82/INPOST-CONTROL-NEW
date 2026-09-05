@@ -958,6 +958,11 @@ class CargaBody(BaseModel):
     loaded_stop_ids: List[str] = []
 
 
+class RepartoBody(BaseModel):
+    idx: int = 0
+    stops: Dict[str, Any] = {}
+
+
 class RouteConfigBody(BaseModel):
     number: str = ""
     driver_id: Optional[str] = None
@@ -1234,6 +1239,33 @@ async def save_my_carga(body: CargaBody, user=Depends(get_current_user)):
             "route_config_id": rc.get("id") if rc else None,
             "route_number": rc.get("number") if rc else None,
             "loaded_stop_ids": body.loaded_stop_ids,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/my/reparto")
+async def my_reparto(user=Depends(get_current_user)):
+    d = _today()
+    doc = await db.reparto_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    return {"date": d, "idx": (doc or {}).get("idx", 0), "stops": (doc or {}).get("stops", {})}
+
+
+@api_router.put("/my/reparto")
+async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0, "id": 1, "number": 1})
+    d = _today()
+    await db.reparto_sessions.update_one(
+        {"driver_id": user["id"], "date": d},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": d,
+            "route_config_id": rc.get("id") if rc else None,
+            "route_number": rc.get("number") if rc else None,
+            "idx": body.idx,
+            "stops": body.stops,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,

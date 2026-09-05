@@ -91,6 +91,8 @@ export const buildMyRoute = async () => (await client.post("/my/route/build")).d
 export const saveDriverRouteOrder = async (stops) => (await client.put("/my/driver-route/order", { date: new Date().toISOString().slice(0,10), stops })).data;
 export const myCarga = async () => (await client.get("/my/carga")).data;
 export const saveMyCarga = async (loadedStopIds) => (await client.put("/my/carga", { loaded_stop_ids: loadedStopIds })).data;
+export const myReparto = async () => (await client.get("/my/reparto")).data;
+export const saveMyReparto = async (idx, stops) => (await client.put("/my/reparto", { idx, stops })).data;
 
 // ---- Route Configs (Configuración de rutas) ----
 export const listRouteConfigs = async () => (await client.get("/route-configs")).data;
