@@ -158,6 +158,11 @@
 - Frontend: DriverApp (Ordenar ruta) + CargaLista + RepartoView usan DayBar y cargan por fecha; en solo lectura se ocultan/inhabilitan reordenar, ingresar/devolver, y las acciones de reparto (Ir/Ya estoy/entregar/recoger).
 - Datos de prueba sembrados (scripts/seed_past_days.py) para el conductor 1122: 2 días anteriores que salieron a ruta — 2026-09-03 (completo) y 2026-09-04 (con incidencias: vuelvo, cerrado definitivo, y una entrega con problema).
 - Verificado por curl (editable/dates por fecha) y capturas (los 3 pasos en día pasado, solo lectura).
+
+## Vínculo Reparto -> Carga del furgón (2026-06-09)
+- CargaLista ahora carga también myReparto(date) y calcula deliveredIds (paradas con progress.delivered en reparto).
+- En la lista "Ingresadas al furgón": si una parada ya está ENTREGADA en Reparto, muestra la etiqueta verde "Entregada al destinatario" y NO permite "Devolver a nave" (botón oculto). Las no entregadas mantienen "Devolver a nave" (en días editables).
+- Verificado por captura (día 2026-09-04: paradas 1 y 4 entregadas -> etiqueta; sin devolver).
 - Lista "Todas las paradas": al seleccionar una parada aparecen 2 botones: "Ir con Google Maps" y "Ya estoy en el sitio" (este último hace esa parada la actual y entra en modo en-sitio).
 - FIX reporte usuario ("al volver a una parada no me deja entregar/recoger"): los botones Entregar/Recoger ya NO se deshabilitan cuando están hechos; muestran "Entregado ✓" / "Recogido ✓ (N)" pero siguen pulsables para corregir/re-registrar. La causa del reporte era estado previo (parada ya servida) que bloqueaba los botones.
 - Verificado por captura.

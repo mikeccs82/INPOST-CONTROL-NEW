@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Hash, ShoppingBag, Package, CheckCircle2, Truck, Undo2, ArrowRight, AlertTriangle, X } from "lucide-react";
-import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga } from "../lib/api";
+import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga, myReparto } from "../lib/api";
 import { DayBar } from "./DayBar";
 
 export const CargaLista = ({ onFinish }) => {
@@ -15,11 +15,12 @@ export const CargaLista = ({ onFinish }) => {
   const [todayD, setTodayD] = useState(null);
   const [editable, setEditable] = useState(true);
   const [dates, setDates] = useState([]);
+  const [deliveredIds, setDeliveredIds] = useState(() => new Set());
 
   const load = useCallback((d) => {
     setLoading(true);
-    Promise.all([myRouteConfig(d), mySacas(d), myCarga(d)])
-      .then(([rc, sc, cg]) => {
+    Promise.all([myRouteConfig(d), mySacas(d), myCarga(d), myReparto(d)])
+      .then(([rc, sc, cg, rp]) => {
         const posByStop = {};
         (sc.session?.positions || []).forEach((p) => { if (p.stop_id) posByStop[p.stop_id] = p; });
         const rs = rc.driver_route?.stops || [];
@@ -31,6 +32,9 @@ export const CargaLista = ({ onFinish }) => {
         setItems(list);
         const valid = new Set(rs.map((s) => s.id));
         setLoaded(new Set((cg.loaded_stop_ids || []).filter((id) => valid.has(id))));
+        const del = new Set();
+        Object.entries(rp.stops || {}).forEach(([id, p]) => { if (p && p.delivered) del.add(id); });
+        setDeliveredIds(del);
         setDate(cg.date); setTodayD(cg.today); setEditable(!!cg.editable); setDates(cg.dates || []);
       })
       .catch(() => toast.error("No se pudo cargar la lista"))
@@ -61,7 +65,7 @@ export const CargaLista = ({ onFinish }) => {
   const loadedList = items.filter((it) => loaded.has(it.id));
 
   const ingresar = () => { if (readOnly) return; if (current) setLoaded((s) => { const n = new Set(s); n.add(current.id); persist(n); return n; }); };
-  const devolver = (id) => { if (readOnly) return; setLoaded((s) => { const n = new Set(s); n.delete(id); persist(n); return n; }); };
+  const devolver = (id) => { if (readOnly || deliveredIds.has(id)) return; setLoaded((s) => { const n = new Set(s); n.delete(id); persist(n); return n; }); };
 
   const proceed = async () => {
     if (readOnly) return;
@@ -147,18 +151,22 @@ export const CargaLista = ({ onFinish }) => {
         ) : (
           <div className="space-y-2">
             {loadedList.map((it) => (
-              <div key={it.id} data-testid={`carga-loaded-${it.parada}`} className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex items-center gap-3">
+              <div key={it.id} data-testid={`carga-loaded-${it.parada}`} className={`border rounded-lg p-3 flex items-center gap-3 ${deliveredIds.has(it.id) ? "bg-emerald-600/10 border-emerald-500/40" : "bg-slate-900 border-slate-700"}`}>
                 <div className="shrink-0 w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center">{it.parada}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-slate-300 font-mono-tech truncate">Pos {it.posicion ?? "—"} · {it.codigo}</div>
                   <div className="text-[11px] text-slate-500">{it.sacas} sacas · {it.bultos} bultos</div>
                 </div>
-                {!readOnly && (
-                <button data-testid={`carga-devolver-${it.parada}`} onClick={() => devolver(it.id)}
-                  className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-white hover:bg-amber-600 border border-amber-500/40 px-2 py-1.5 rounded-md transition-colors">
-                  <Undo2 size={13} /> Devolver a nave
-                </button>
-                )}
+                {deliveredIds.has(it.id) ? (
+                  <span data-testid={`carga-entregada-${it.parada}`} className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                    <CheckCircle2 size={13} /> Entregada al destinatario
+                  </span>
+                ) : (!readOnly && (
+                  <button data-testid={`carga-devolver-${it.parada}`} onClick={() => devolver(it.id)}
+                    className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-white hover:bg-amber-600 border border-amber-500/40 px-2 py-1.5 rounded-md transition-colors">
+                    <Undo2 size={13} /> Devolver a nave
+                  </button>
+                ))}
               </div>
             ))}
           </div>
