@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
+import re
 import json
 import logging
 import math
@@ -518,6 +519,33 @@ def _parse_stops_from_df(df):
     c_type = pick("tipo de parada", "tipo", "type", "stop type", "columna2")
     c_route = pick("ruta", "route", "nº ruta", "n ruta", "numero de ruta", "número de ruta")
 
+    # Búsqueda por coincidencia parcial (encabezados variables / truncados)
+    for low, orig in cols.items():
+        if c_wf is None and ("time" in low or "ventana" in low or "horario" in low) and ("start" in low or "from" in low or "desde" in low or "inicio" in low or "ini" in low):
+            c_wf = orig
+        if c_wt is None and ("time" in low or "ventana" in low or "horario" in low) and ("end" in low or "to" in low or "hasta" in low or "fin" in low):
+            c_wt = orig
+        if c_lat is None and "lat" in low:
+            c_lat = orig
+        if c_lon is None and ("lon" in low or "lng" in low):
+            c_lon = orig
+        if c_addr is None and ("address" in low or "direc" in low or "domicil" in low):
+            c_addr = orig
+
+    def fmt_time(v):
+        if v is None:
+            return None
+        if hasattr(v, "strftime"):
+            try:
+                return v.strftime("%H:%M")
+            except Exception:
+                pass
+        s = str(v).strip()
+        m = re.search(r"(\d{1,2}):(\d{2})", s)
+        if m:
+            return f"{int(m.group(1)):02d}:{m.group(2)}"
+        return s or None
+
     # Nombre del destinatario: si no hay columna de nombre dedicada, se usa "Notes".
     name_src = c_name or c_notes
     notes_col = c_notes if (c_notes and c_notes != name_src) else None
@@ -563,8 +591,8 @@ def _parse_stops_from_df(df):
             "name": str(name) if name is not None else "",
             "address": str(addr) if addr is not None else "",
             "order_id": str(val(c_id)) if val(c_id) is not None else None,
-            "window_from": str(val(c_wf)) if val(c_wf) is not None else None,
-            "window_to": str(val(c_wt)) if val(c_wt) is not None else None,
+            "window_from": fmt_time(val(c_wf)),
+            "window_to": fmt_time(val(c_wt)),
             "notes": str(val(notes_col)) if val(notes_col) is not None else None,
             "phone": str(val(c_phone)) if val(c_phone) is not None else None,
             "email": str(val(c_email)) if val(c_email) is not None else None,

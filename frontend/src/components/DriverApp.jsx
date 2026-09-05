@@ -151,7 +151,7 @@ export const DriverApp = ({ user, onLogout }) => {
                 <MapView stops={stops} geometry={geometry} legs={legs} start={driverRoute?.start || null} end={driverRoute?.end || null} selectedId={selectedId} onSelect={setSelectedId} />
               </div>
               <div className="flex-1 md:flex-none md:w-[380px] overflow-y-auto thin-scroll p-3 bg-slate-900 border-t md:border-t-0 md:border-r border-slate-700 order-2 md:order-1 min-h-0">
-                <StopList stops={stops} onReorder={reorder} onRemove={() => {}} selectedId={selectedId} onSelect={setSelectedId} onChangeType={() => {}} schedule={{}} onChangeWindow={() => {}} />
+                <StopList stops={stops} onReorder={reorder} onRemove={() => {}} selectedId={selectedId} onSelect={setSelectedId} onChangeType={() => {}} schedule={{}} onChangeWindow={() => {}} readOnlyMeta={true} />
               </div>
             </div>
           )}

@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Flag, Clock } from "lucide-react";
 
-export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onChangeType, schedule = {}, onChangeWindow }) => {
+const TYPE_LABELS = { P: "Particular", PD: "PUDO", L: "Locker", L24: "Locker 24h" };
+
+export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onChangeType, schedule = {}, onChangeWindow, readOnlyMeta = false }) => {
   const refs = useRef({});
 
   useEffect(() => {
@@ -68,40 +70,56 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                           <span className="text-[10px] font-mono-tech text-slate-400">
                             {Number(s.lat).toFixed(4)}, {Number(s.lon).toFixed(4)}
                           </span>
-                          <select
-                            data-testid={`stop-type-${index}`}
-                            value={s.stop_type || ""}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => onChangeType(s.id, e.target.value)}
-                            className="ml-auto text-[10px] bg-slate-900 border border-slate-700 text-slate-200 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] cursor-pointer"
-                          >
-                            <option value="">Sin tipo</option>
-                            <option value="P">Particular</option>
-                            <option value="PD">PUDO</option>
-                            <option value="L">Locker</option>
-                            <option value="L24">Locker 24h</option>
-                          </select>
+                          {readOnlyMeta ? (
+                            s.stop_type && (
+                              <span data-testid={`stop-type-${index}`} className="ml-auto text-[10px] font-bold uppercase bg-slate-700/60 border border-slate-600 text-slate-200 rounded px-1.5 py-0.5">
+                                {TYPE_LABELS[s.stop_type] || s.stop_type}
+                              </span>
+                            )
+                          ) : (
+                            <select
+                              data-testid={`stop-type-${index}`}
+                              value={s.stop_type || ""}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => onChangeType(s.id, e.target.value)}
+                              className="ml-auto text-[10px] bg-slate-900 border border-slate-700 text-slate-200 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] cursor-pointer"
+                            >
+                              <option value="">Sin tipo</option>
+                              <option value="P">Particular</option>
+                              <option value="PD">PUDO</option>
+                              <option value="L">Locker</option>
+                              <option value="L24">Locker 24h</option>
+                            </select>
+                          )}
                           {s.service_min != null && (
-                            <span data-testid={`stop-min-${index}`} className="text-[10px] font-mono-tech text-[#F26A21]">{s.service_min}m</span>
+                            <span data-testid={`stop-min-${index}`} className={`text-[10px] font-mono-tech text-[#F26A21] ${readOnlyMeta && s.stop_type ? "" : ""}`}>{s.service_min}m</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
                           <Clock size={10} className="text-slate-500 shrink-0" />
-                          <input
-                            data-testid={`stop-wfrom-${index}`}
-                            type="time"
-                            value={(s.window_from || "").slice(0, 5)}
-                            onChange={(e) => onChangeWindow(s.id, e.target.value, (s.window_to || "").slice(0, 5))}
-                            className="text-[10px] font-mono-tech bg-slate-900 border border-slate-700 text-slate-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] w-[96px]"
-                          />
-                          <span className="text-slate-500 text-[10px]">–</span>
-                          <input
-                            data-testid={`stop-wto-${index}`}
-                            type="time"
-                            value={(s.window_to || "").slice(0, 5)}
-                            onChange={(e) => onChangeWindow(s.id, (s.window_from || "").slice(0, 5), e.target.value)}
-                            className="text-[10px] font-mono-tech bg-slate-900 border border-slate-700 text-slate-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] w-[96px]"
-                          />
+                          {readOnlyMeta ? (
+                            <span data-testid={`stop-window-${index}`} className="text-[10px] font-mono-tech text-slate-300">
+                              {(s.window_from || "").slice(0, 5) || "--:--"} – {(s.window_to || "").slice(0, 5) || "--:--"}
+                            </span>
+                          ) : (
+                            <>
+                              <input
+                                data-testid={`stop-wfrom-${index}`}
+                                type="time"
+                                value={(s.window_from || "").slice(0, 5)}
+                                onChange={(e) => onChangeWindow(s.id, e.target.value, (s.window_to || "").slice(0, 5))}
+                                className="text-[10px] font-mono-tech bg-slate-900 border border-slate-700 text-slate-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] w-[96px]"
+                              />
+                              <span className="text-slate-500 text-[10px]">–</span>
+                              <input
+                                data-testid={`stop-wto-${index}`}
+                                type="time"
+                                value={(s.window_to || "").slice(0, 5)}
+                                onChange={(e) => onChangeWindow(s.id, (s.window_from || "").slice(0, 5), e.target.value)}
+                                className="text-[10px] font-mono-tech bg-slate-900 border border-slate-700 text-slate-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-[#F26A21] w-[96px]"
+                              />
+                            </>
+                          )}
                           {sched && (
                             <span
                               data-testid={`stop-eta-${index}`}
@@ -113,14 +131,16 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                           )}
                         </div>
                       </div>
-                      <button
-                        data-testid={`remove-stop-${index}`}
-                        title="Eliminar"
-                        onClick={(e) => { e.stopPropagation(); onRemove(s.id); }}
-                        className="text-slate-500 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {!readOnlyMeta && (
+                        <button
+                          data-testid={`remove-stop-${index}`}
+                          title="Eliminar"
+                          onClick={(e) => { e.stopPropagation(); onRemove(s.id); }}
+                          className="text-slate-500 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </Draggable>
