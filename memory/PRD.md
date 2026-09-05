@@ -115,3 +115,6 @@
 - CargaOrden.jsx: cajas apiladas en columnas de 3, de abajo hacia arriba (1,2,3 col1; 4,5,6 col2; 7... col3). count = nº paradas del driver_route (cap 12). Animación escalonada por índice. Cabina detallada (parabrisas/faro/espejo, verificada testing iteration_11). Badge/mensaje actualizados al apilado por columnas respetando recogidas.
 - Driver 1122 tiene driver_route con 7 paradas (para demo del apilado).
 - PENDIENTE usuario: redeploy para emergent.host.
+
+## Orden de carga: orden real de apilado (2026-06-05)
+- CargaOrden.jsx: se carga primero la ÚLTIMA parada junto a la zona de recogidas (frente/derecha), apilando hacia arriba, y avanzando columna a columna HACIA LA PUERTA. Ej 6 paradas: col recogidas 6(abajo),5,4 | col puerta 3,2,1. La parada 1 (naranja) queda del lado de la puerta. stop = n - j; col=floor(j/3) desde recogidas; delay j*0.4 (n primero). Mensaje/badge actualizados.

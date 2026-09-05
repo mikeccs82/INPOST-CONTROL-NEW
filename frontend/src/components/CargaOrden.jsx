@@ -2,19 +2,21 @@ import { Info } from "lucide-react";
 
 export const CargaOrden = ({ count = 6 }) => {
   const n = Math.max(3, Math.min(count || 6, 12));
-  const ROWS = 3;                         // 3 cajas por columna (de abajo hacia arriba)
-  const cols = Math.ceil(n / ROWS);
-  const areaX = 46, colGap = 12;
-  const boxW = 30, boxH = 26, depth = 6, rowGap = 4;
-  const floorTop = 138;                   // base (suelo interior)
+  const ROWS = 3;
+  const boxW = 30, boxH = 26, depth = 6, rowGap = 4, colGap = 12;
+  const colW = boxW + depth + colGap;
+  const rightX = 214;        // columna pegada a la zona de recogidas (frente)
+  const floorTop = 138;
 
-  const boxes = Array.from({ length: n }, (_, idx) => {
-    const stop = idx + 1;                 // 1,2,3 (col 1) ; 4,5,6 (col 2) ...
-    const col = Math.floor(idx / ROWS);
-    const row = idx % ROWS;               // 0 = abajo
-    const x = areaX + col * (boxW + depth + colGap);
+  // Se carga la última parada primero, junto a recogidas, apilando hacia arriba;
+  // luego columna a columna hacia la puerta. Ej (6): 6,5,4 | 3,2,1
+  const boxes = Array.from({ length: n }, (_, j) => {
+    const stop = n - j;                 // 6,5,4,3,2,1...
+    const col = Math.floor(j / ROWS);   // 0 = pegado a recogidas
+    const row = j % ROWS;               // 0 = abajo
+    const x = rightX - col * colW;
     const y = floorTop - (row + 1) * boxH - row * rowGap;
-    const delay = idx * 0.32;             // se apila de abajo hacia arriba, columna a columna
+    const delay = j * 0.4;              // 6 primero, luego 5, 4, 3, 2, 1
     return { stop, x, y, delay };
   });
 
@@ -110,7 +112,7 @@ export const CargaOrden = ({ count = 6 }) => {
           </svg>
           <div className="text-center mt-1">
             <span className="inline-block text-[11px] font-bold uppercase tracking-wide text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2.5 py-0.5 rounded-full">
-              Apila de abajo hacia arriba · sigue en la siguiente columna
+              Junto a recogidas la última · apila y sigue hacia la puerta
             </span>
           </div>
         </div>
@@ -118,7 +120,7 @@ export const CargaOrden = ({ count = 6 }) => {
         <div className="rounded-xl bg-[#2563EB]/10 border border-[#2563EB]/30 p-4 flex gap-3">
           <Info size={22} className="text-[#2563EB] shrink-0 mt-0.5" />
           <p className="text-sm text-slate-200 leading-relaxed">
-            Apila las paradas <span className="font-bold text-white">una encima de otra, de abajo hacia arriba</span> (1, 2, 3…). Cuando la columna llegue arriba, sigue en la <span className="font-bold text-white">siguiente columna</span> (4, 5, 6…), <span className="font-bold text-green-400">respetando el espacio de recogidas</span>.
+            Coloca primero, <span className="font-bold text-green-400">junto a las recogidas</span>, la <span className="font-bold text-white">última parada</span> y ve apilando encima (…5, 4). Sigue en la siguiente columna <span className="font-bold text-white">hacia la puerta</span> (3, 2, 1). Así, al abrir atrás, la <span className="font-bold text-[#F26A21]">parada 1 queda a mano</span>.
           </p>
         </div>
       </div>
