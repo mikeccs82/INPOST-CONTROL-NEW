@@ -360,7 +360,7 @@ export const SacasSort = ({ onNext }) => {
         {positions.length === 0 && isolated.length === 0 && !pending && (
           <div className="text-center text-slate-500 text-sm py-10">
             <Boxes size={28} className="mx-auto mb-2 opacity-40" />
-            Empieza escaneando la primera saca.
+            Empieza escribiendo o diciendo por voz el número.
           </div>
         )}
       </div>
