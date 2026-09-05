@@ -64,3 +64,8 @@
 - Backend: GET /api/my/sacas (devuelve stops del route_config del driver + session), PUT /api/my/sacas (guarda saca_session={positions,isolated} en el route_config). Modelos SacaPosition/SacaIsolated/SacaSessionBody. api.js: mySacas, saveMySacas.
 - Probado: backend curl (GET/PUT/persist) + screenshots móvil (new/existing/unknown/persist). Voz no testeable por screenshot pero usa misma ruta lógica.
 - PENDIENTE (usuario lo definirá): usar las paradas "que salieron" (con posición) en el Paso 2 "Ordenar ruta" para optimizar solo ese subconjunto. Storage ya listo.
+
+## Fix móvil cabecera Simulación + aclaraciones (2026-06-05)
+- BUG: en 'Simulación de ruta' (App.js) la cabecera blanca con muchos botones se desbordaba en móvil y 'Salir' (logout-btn) quedaba fuera de pantalla (right~602>390). FIX: grupo derecho de botones ahora 'flex flex-wrap justify-end w-full md:w-auto' -> envuelve en filas; logout-btn dentro del viewport (right=378). Verificado testing agent iteration_8 (12/12, 0 bugs).
+- Aclaración usuario 1111: su contraseña es 1111 (no 2002). Login OK con 1111/1111.
+- 'No sale el dashboard admin' en móvil: en PREVIEW sí sale (probable versión DESPLEGADA antigua -> el usuario debe redeploy para ver el dashboard nuevo).

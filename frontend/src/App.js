@@ -385,25 +385,22 @@ function App({ user, onLogout, onBack }) {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Toaster theme="dark" position="top-right" richColors />
       {/* Header */}
-      <header className="min-h-16 shrink-0 bg-white border-b-2 border-[#F26A21] flex flex-wrap items-center justify-between gap-y-2 px-3 md:px-4 py-2 z-20">
-        <div className="flex items-center gap-3">
+      <header className="min-h-16 shrink-0 bg-white border-b-2 border-[#F26A21] flex flex-wrap items-center justify-between gap-2 px-3 md:px-4 py-2 z-20">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
           {onBack && (
             <button data-testid="sim-back-btn" onClick={onBack} title="Volver al panel"
-              className="flex items-center justify-center w-9 h-9 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700">
+              className="flex items-center justify-center w-9 h-9 shrink-0 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700">
               <ArrowLeft size={18} />
             </button>
           )}
-          <img src={LOGO} alt="BoxLogic" className="h-11 w-auto" data-testid="brand-logo" />
-          <div className="hidden sm:block border-l border-slate-200 pl-3">
-            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Simulación de ruta</p>
-          </div>
+          <img src={LOGO} alt="BoxLogic" className="h-9 md:h-11 w-auto shrink-0" data-testid="brand-logo" />
           <button data-testid="sim-change-route" onClick={backToGate}
-            className="flex items-center gap-1.5 text-xs font-bold text-[#F26A21] bg-[#F26A21]/10 hover:bg-[#F26A21]/20 border border-[#F26A21]/30 px-3 py-1.5 rounded-md transition-colors">
-            <FlaskConical size={13} /> {targetRoute ? `Ruta ${targetRoute.number}` : "Simulación libre"}
-            <ChevronRight size={13} className="opacity-60" />
+            className="flex items-center gap-1.5 text-xs font-bold text-[#F26A21] bg-[#F26A21]/10 hover:bg-[#F26A21]/20 border border-[#F26A21]/30 px-2.5 py-1.5 rounded-md transition-colors min-w-0">
+            <FlaskConical size={13} className="shrink-0" /> <span className="truncate">{targetRoute ? `Ruta ${targetRoute.number}` : "Simulación libre"}</span>
+            <ChevronRight size={13} className="opacity-60 shrink-0" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 w-full md:w-auto">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" data-testid="file-input" />
           <button data-testid="import-btn" onClick={() => fileRef.current?.click()} disabled={importing}
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#1E5AA8] hover:bg-[#184a8c] px-3 py-2 rounded-md transition-colors disabled:opacity-50">
@@ -425,7 +422,6 @@ function App({ user, onLogout, onBack }) {
             className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-white hover:bg-red-500 bg-red-50 border border-red-200 px-3 py-2 rounded-md transition-colors">
             <RotateCcw size={14} /> Reiniciar
           </button>
-          <span className="hidden md:inline text-xs text-slate-400 font-mono-tech ml-1">{user?.nombres || user?.username}</span>
           <button data-testid="logout-btn" onClick={onLogout}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-white hover:bg-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-md transition-colors">
             <LogOut size={14} /> Salir

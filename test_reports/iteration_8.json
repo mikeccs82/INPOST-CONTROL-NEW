@@ -1,0 +1,20 @@
+{
+  "summary": "Frontend-only verification of the mobile header fix in 'Simulación de ruta' plus regressions on desktop and auth. All 12 checks passed. On mobile (390x844), the Simulacion header logout-btn is at right=378 (inside viewport), no horizontal overflow (scrollWidth==clientWidth==390), and clicking it returns to login-form. Admin dashboard shows all 4 cards on mobile and admin-logout / admin-logout-top are visible and functional. Desktop (1280x800) still shows all header buttons (Importar Excel, Conductores, Rutas, Exportar, Reiniciar, Salir) and sim-change-route chip; sim-back-btn returns to admin-dashboard. Auth: driver 1111/1111 OK, 1001/2002 OK, wrong creds show 'Usuario o contraseña incorrectos' in login-error.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (12/12)"},
+  "test_credentials": "Admin 5708699/16288959, Driver 1001/2002, Driver 1111/1111",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile responsivity fix confirmed. logout-btn now sits inside 390px viewport (right=378) in Simulación header. Auth working for all 3 accounts. Only 1 route present ('Ruta 8010'), so gate select uses index=1.",
+  "rca of the issue": "Previous: on mobile, the white header in Simulación de ruta had a fixed-row button group causing horizontal overflow, pushing logout-btn to right~602px (off-screen). Fix (flex-wrap + w-full md:w-auto on the right group) wraps buttons to multiple rows on mobile, keeping logout-btn on-screen. Verified via getBoundingClientRect + document.scrollWidth."
+}
