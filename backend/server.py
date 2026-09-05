@@ -903,6 +903,7 @@ class LoginBody(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
+    is_admin: bool = False
     nombres: str = ""
     apellidos: str = ""
     dni: str = ""
@@ -962,6 +963,13 @@ class CargaBody(BaseModel):
 class RepartoBody(BaseModel):
     idx: int = 0
     stops: Dict[str, Any] = {}
+
+
+class LocationBody(BaseModel):
+    stop_id: Optional[str] = None
+    lat: float
+    lon: float
+    accuracy: Optional[float] = None
 
 
 class RouteConfigBody(BaseModel):
@@ -1052,7 +1060,7 @@ async def auth_me(user=Depends(get_current_user)):
 
 @api_router.get("/users")
 async def list_users(admin=Depends(require_admin)):
-    return await db.users.find({"role": "driver"}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(1000)
+    return await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(1000)
 
 
 @api_router.post("/users")
@@ -1060,11 +1068,12 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
     if await db.users.find_one({"username": body.username}):
         raise HTTPException(400, "Ese usuario ya existe")
     doc = body.model_dump()
+    is_admin = doc.pop("is_admin", False)
     pw = doc.pop("password")
     doc["password_hash"] = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
     doc["password_plain"] = pw
     doc["id"] = str(uuid.uuid4())
-    doc["role"] = "driver"
+    doc["role"] = "admin" if is_admin else "driver"
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.users.insert_one(doc)
     return {k: v for k, v in doc.items() if k not in ("_id", "password_hash")}
@@ -1072,8 +1081,8 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
 
 @api_router.put("/users/{uid}")
 async def update_user(uid: str, body: UserUpdate, admin=Depends(require_admin)):
-    if not await db.users.find_one({"id": uid, "role": "driver"}):
-        raise HTTPException(404, "Conductor no encontrado")
+    if not await db.users.find_one({"id": uid}):
+        raise HTTPException(404, "Usuario no encontrado")
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
     pw = upd.pop("password", None)
     if pw:
@@ -1086,9 +1095,12 @@ async def update_user(uid: str, body: UserUpdate, admin=Depends(require_admin)):
 
 @api_router.delete("/users/{uid}")
 async def delete_user(uid: str, admin=Depends(require_admin)):
-    r = await db.users.delete_one({"id": uid, "role": "driver"})
-    if r.deleted_count == 0:
-        raise HTTPException(404, "Conductor no encontrado")
+    target = await db.users.find_one({"id": uid})
+    if not target:
+        raise HTTPException(404, "Usuario no encontrado")
+    if target.get("username") == os.environ.get("ADMIN_USERNAME"):
+        raise HTTPException(400, "No se puede eliminar el administrador principal")
+    await db.users.delete_one({"id": uid})
     return {"ok": True}
 
 
@@ -1341,6 +1353,34 @@ async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
         }},
         upsert=True,
     )
+    return {"ok": True}
+
+
+@api_router.post("/my/location")
+async def save_my_location(body: LocationBody, user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0, "id": 1, "number": 1})
+    d = _today()
+    stop_name = None
+    if body.stop_id and rc:
+        for s in (rc.get("stops") or []):
+            if s.get("id") == body.stop_id:
+                stop_name = s.get("name")
+                break
+    doc = {
+        "id": str(uuid.uuid4()),
+        "driver_id": user["id"],
+        "driver_username": user.get("username"),
+        "date": d,
+        "stop_id": body.stop_id,
+        "stop_name": stop_name,
+        "route_config_id": rc.get("id") if rc else None,
+        "route_number": rc.get("number") if rc else None,
+        "lat": body.lat,
+        "lon": body.lon,
+        "accuracy": body.accuracy,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.driver_locations.insert_one(doc)
     return {"ok": True}
 
 

@@ -159,7 +159,10 @@
 - Datos de prueba sembrados (scripts/seed_past_days.py) para el conductor 1122: 2 días anteriores que salieron a ruta — 2026-09-03 (completo) y 2026-09-04 (con incidencias: vuelvo, cerrado definitivo, y una entrega con problema).
 - Verificado por curl (editable/dates por fecha) y capturas (los 3 pasos en día pasado, solo lectura).
 
-## Guía visual + pantalla de entrada en Ordenar Sacas (2026-06-09)
+## Usuarios admin adicionales + ubicación GPS del conductor (2026-06-09)
+- Alta de usuarios (UsersDialog): checkbox "Es administrador". Backend UserCreate.is_admin -> role "admin"|"driver". Al marcarlo se ocultan datos de furgón. GET /users ahora devuelve todos (drivers+admins); RouteConfigPanel filtra role!=='admin' para el desplegable de conductores. update/delete_user por id (protegido: no se puede borrar el ADMIN_USERNAME principal). Verificado: crear admin/driver, login del nuevo admin, listar usuarios.
+- Ubicación GPS: al pulsar "Ya estoy en el sitio" (tarjeta actual o lista) se captura navigator.geolocation y se envía a POST /api/my/location -> colección `driver_locations` {driver_id, driver_username, date, stop_id, stop_name, route_number, lat, lon, accuracy, created_at}. Solo en día editable. Verificado por curl (registro guardado).
+- App reiniciada a cero: solo queda el admin principal (5708699). seed_data.json vaciado para que producción también arranque limpia; seed inicial idempotente por bandera seed_flags.
 - Foto de etiqueta enderezada (CCW) y mejorada (contraste/nitidez); guardada en /app/frontend/public/saca-ejemplo.jpg.
 - Dibujados 2 recuadros rojos con etiquetas: "RUTA" junto a Zona de reparto (8014) y "PARADA ID" junto a los últimos 4 dígitos del Identificador de punto (4346).
 - SacasSort: pantalla de entrada (estado `intro`) al abrir la sección: muestra la imagen + 2 instrucciones + botón "Siguiente" (data-testid sacas-intro-next) que lleva a la pantalla de ordenar sacas. Imagen servida como /saca-ejemplo.jpg?v=3.

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Navigation, PackageCheck, Flag, CheckCircle2, PackageOpen, PackagePlus, ArrowRight, ShoppingBag, Package, Minus, Plus, AlertTriangle, Clock, X, DoorClosed } from "lucide-react";
-import { myRouteConfig, mySacas, myReparto, saveMyReparto } from "../lib/api";
+import { myRouteConfig, mySacas, myReparto, saveMyReparto, saveMyLocation } from "../lib/api";
 import { DayBar } from "./DayBar";
 
 const gmapsUrl = (s) => {
@@ -69,6 +69,20 @@ export const RepartoView = () => {
   useEffect(() => { load(); }, [load]);
 
   const persist = (nextIdx, nextProgress) => { if (editable) saveMyReparto(nextIdx, nextProgress).catch(() => {}); };
+
+  const captureLocation = (stopId) => {
+    if (!editable) return;
+    if (!navigator.geolocation) { toast.error("Tu dispositivo no permite ubicación"); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        saveMyLocation({ stop_id: stopId, lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
+          .then(() => toast.success("Ubicación registrada"))
+          .catch(() => toast.error("No se pudo guardar la ubicación"));
+      },
+      () => toast.error("No se pudo obtener tu ubicación (permite el GPS)"),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
 
@@ -177,7 +191,7 @@ export const RepartoView = () => {
                   className="w-full flex items-center justify-center gap-2.5 bg-[#F26A21] hover:bg-[#f58220] text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98] shadow-lg shadow-orange-900/30">
                   <Navigation size={24} /> Ir con Google Maps
                 </button>
-                <button data-testid="reparto-at-site" onClick={() => setAtSite(true)}
+                <button data-testid="reparto-at-site" onClick={() => { setAtSite(true); captureLocation(cur.id); }}
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-3.5 rounded-xl transition-colors">
                   <MapPin size={18} /> Ya estoy en el sitio
                 </button>
@@ -288,7 +302,7 @@ export const RepartoView = () => {
                       className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
                       <Navigation size={16} /> Ir con Google Maps
                     </button>
-                    <button data-testid={`reparto-atsite-list-${i + 1}`} onClick={() => { setIdx(i); persist(i, progress); resetLocal(); setAtSite(true); setSelectedId(null); }}
+                    <button data-testid={`reparto-atsite-list-${i + 1}`} onClick={() => { setIdx(i); persist(i, progress); resetLocal(); setAtSite(true); setSelectedId(null); captureLocation(s.id); }}
                       className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
                       <MapPin size={16} /> Ya estoy en el sitio
                     </button>

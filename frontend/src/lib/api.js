@@ -93,6 +93,7 @@ export const myCarga = async (date) => (await client.get("/my/carga", { params: 
 export const saveMyCarga = async (loadedStopIds) => (await client.put("/my/carga", { loaded_stop_ids: loadedStopIds })).data;
 export const myReparto = async (date) => (await client.get("/my/reparto", { params: date ? { date } : {} })).data;
 export const saveMyReparto = async (idx, stops) => (await client.put("/my/reparto", { idx, stops })).data;
+export const saveMyLocation = async (payload) => (await client.post("/my/location", payload)).data;
 
 // ---- Route Configs (Configuración de rutas) ----
 export const listRouteConfigs = async () => (await client.get("/route-configs")).data;

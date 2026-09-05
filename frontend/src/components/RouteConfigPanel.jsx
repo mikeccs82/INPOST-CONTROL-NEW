@@ -251,7 +251,7 @@ export const RouteConfigPanel = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const [rc, drv] = await Promise.all([listRouteConfigs(), listUsers()]); setItems(rc); setDrivers(drv); }
+    try { const [rc, drv] = await Promise.all([listRouteConfigs(), listUsers()]); setItems(rc); setDrivers((drv || []).filter((d) => d.role !== "admin")); }
     catch (e) { toast.error("No se pudieron cargar las rutas"); }
     finally { setLoading(false); }
   }, []);

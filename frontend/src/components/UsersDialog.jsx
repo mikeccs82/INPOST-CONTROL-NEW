@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Users, UserPlus, Trash2, Pencil, ArrowLeft, Save, MessageCircle } from "lucide-react";
+import { X, Users, UserPlus, Trash2, Pencil, ArrowLeft, Save, MessageCircle, ShieldCheck } from "lucide-react";
 import { listUsers, createUser, updateUser, removeUser } from "../lib/api";
 import { toast } from "sonner";
 
-const EMPTY = { username: "", password: "", nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "" };
+const EMPTY = { username: "", password: "", is_admin: false, nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "" };
 const CAPS = ["L1H1", "L2H2", "L3H2", "L4H3"];
 const inp = "w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]";
 
@@ -37,8 +37,8 @@ export const UsersDialog = ({ open, onClose }) => {
   const save = async () => {
     if (!form.username.trim() || (!editId && !form.password.trim())) { toast.error("Usuario y contraseña obligatorios"); return; }
     try {
-      if (editId) { const p = { ...form }; if (!p.password) delete p.password; await updateUser(editId, p); toast.success("Conductor actualizado"); }
-      else { await createUser(form); toast.success("Conductor creado"); }
+      if (editId) { const p = { ...form }; if (!p.password) delete p.password; await updateUser(editId, p); toast.success("Usuario actualizado"); }
+      else { await createUser(form); toast.success(form.is_admin ? "Administrador creado" : "Conductor creado"); }
       setMode("list"); refresh();
     } catch (e) { toast.error(e?.response?.data?.detail || "Error al guardar"); }
   };
@@ -63,8 +63,11 @@ export const UsersDialog = ({ open, onClose }) => {
                 users.map((d) => (
                   <div key={d.id} data-testid={`user-row-${d.id}`} className="border border-slate-700 rounded-md p-3 mb-2 flex items-center justify-between hover:border-slate-500">
                     <div className="min-w-0">
-                      <div className="text-white font-semibold truncate">{d.nombres} {d.apellidos} <span className="text-slate-500 font-mono-tech text-xs">({d.username})</span></div>
-                      <div className="text-xs text-slate-400 truncate">{[d.marca, d.modelo, d.anio, d.matricula, d.capacidad, d.color].filter(Boolean).join(" · ")}</div>
+                      <div className="text-white font-semibold truncate flex items-center gap-2">
+                        {d.nombres} {d.apellidos} <span className="text-slate-500 font-mono-tech text-xs">({d.username})</span>
+                        {d.role === "admin" && <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase text-[#F26A21] bg-[#F26A21]/15 border border-[#F26A21]/40 px-1.5 py-0.5 rounded"><ShieldCheck size={10} /> Admin</span>}
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">{d.role === "admin" ? "Administrador" : [d.marca, d.modelo, d.anio, d.matricula, d.capacidad, d.color].filter(Boolean).join(" · ")}</div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-2">
                       <a data-testid={`wa-${d.id}`} href={waLink(d.telefono, d.username, d.password_plain || "")} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400" title="Enviar acceso por WhatsApp"><MessageCircle size={17} /></a>
@@ -86,6 +89,12 @@ export const UsersDialog = ({ open, onClose }) => {
                 <F label="Usuario" k="username" form={form} set={set} />
                 <F label={editId ? "Contraseña (dejar vacío = mantener)" : "Contraseña"} k="password" form={form} set={set} />
               </div>
+              <label data-testid="user-is-admin" className="flex items-center gap-2.5 cursor-pointer rounded-md border border-slate-700 bg-slate-900 px-3 py-2.5">
+                <input type="checkbox" checked={!!form.is_admin} onChange={(e) => set("is_admin", e.target.checked)} className="w-4 h-4 accent-[#F26A21]" disabled={!!editId} />
+                <ShieldCheck size={16} className="text-[#F26A21]" />
+                <span className="text-sm text-white font-semibold">Es administrador</span>
+                <span className="text-xs text-slate-500 ml-auto">acceso al panel de gestión</span>
+              </label>
               <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Datos personales</p>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Nombres" k="nombres" form={form} set={set} />
@@ -93,6 +102,7 @@ export const UsersDialog = ({ open, onClose }) => {
                 <F label="DNI/NIE" k="dni" form={form} set={set} />
                 <F label="Teléfono" k="telefono" form={form} set={set} />
               </div>
+              {!form.is_admin && (<>
               <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Furgón</p>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Marca" k="marca" form={form} set={set} />
@@ -114,6 +124,7 @@ export const UsersDialog = ({ open, onClose }) => {
                   </select>
                 </div>
               </div>
+              </>)}
             </div>
             <div className="p-4 border-t border-slate-700 flex justify-between gap-2">
               <a data-testid="form-wa" href={waLink(form.telefono, form.username, form.password)} target="_blank" rel="noreferrer"
