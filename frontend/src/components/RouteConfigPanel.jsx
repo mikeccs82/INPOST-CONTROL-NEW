@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Plus, Route, MapPin, Clock, Anchor, CalendarClock, X, Loader2, Trash2, Upload, Eye, Save, FlaskConical, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
 import {
   listRouteConfigs, createRouteConfig, updateRouteConfig, deleteRouteConfig,
-  updateConfigStops, getRouteConfig, importAllConfigStops,
+  updateConfigStops, getRouteConfig, importAllConfigStops, listDelegaciones,
 } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 
@@ -21,11 +21,17 @@ const Field = ({ label, children }) => (
 );
 const inputCls = "w-full bg-slate-900 border border-slate-700 text-white rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]";
 
-const RouteForm = ({ values, setValues }) => {
+const RouteForm = ({ values, setValues, delegaciones = [] }) => {
   return (
   <div className="space-y-3">
     <Field label="Número / Nombre de ruta">
       <input data-testid="rc-number" className={inputCls} value={values.number} onChange={(e) => setValues({ ...values, number: e.target.value })} placeholder="Ej. 8002" />
+    </Field>
+    <Field label="Delegación (define la nave de salida y retorno)">
+      <select data-testid="rc-delegacion" className={inputCls} value={values.delegacion || ""} onChange={(e) => setValues({ ...values, delegacion: e.target.value })}>
+        <option value="">— Elige delegación —</option>
+        {delegaciones.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+      </select>
     </Field>
     <label data-testid="rc-activa" className="flex items-center gap-2.5 cursor-pointer rounded-md border border-slate-600 bg-slate-900 px-3 py-2.5">
       <input type="checkbox" checked={values.activa !== false} onChange={(e) => setValues({ ...values, activa: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
@@ -83,9 +89,9 @@ const StopsViewer = ({ route, onClose }) => (
   </Modal>
 );
 
-const DetailModal = ({ id, onClose, onChanged }) => {
+const DetailModal = ({ id, delegaciones, onClose, onChanged }) => {
   const [route, setRoute] = useState(null);
-  const [values, setValues] = useState({ number: "", activa: true, load_time: "", dock: null, departure_time: "" });
+  const [values, setValues] = useState({ number: "", activa: true, delegacion: "", load_time: "", dock: null, departure_time: "" });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewStops, setViewStops] = useState(false);
@@ -93,7 +99,7 @@ const DetailModal = ({ id, onClose, onChanged }) => {
   const refresh = useCallback(async () => {
     const r = await getRouteConfig(id);
     setRoute(r);
-    setValues({ number: r.number || "", activa: r.activa !== false, load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
+    setValues({ number: r.number || "", activa: r.activa !== false, delegacion: r.delegacion || "", load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
   }, [id]);
 
   useEffect(() => { refresh().catch(() => toast.error("No se pudo cargar la ruta")); }, [refresh]);
@@ -131,7 +137,7 @@ const DetailModal = ({ id, onClose, onChanged }) => {
           <button data-testid="rc-detail-close" onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
         <div className="p-4 space-y-4">
-          <RouteForm values={values} setValues={setValues} />
+          <RouteForm values={values} setValues={setValues} delegaciones={delegaciones} />
 
           <div className="flex items-center justify-between rounded-md bg-slate-900 border border-slate-700 px-3 py-2">
             <span className="text-sm text-slate-300 flex items-center gap-2"><MapPin size={15} className="text-[#F26A21]" /> {route.stops_count || 0} paradas</span>
@@ -173,13 +179,14 @@ const DetailModal = ({ id, onClose, onChanged }) => {
   );
 };
 
-const NewModal = ({ onClose, onCreated }) => {
-  const [values, setValues] = useState({ number: "", activa: true, load_time: "", dock: null, departure_time: "" });
+const NewModal = ({ delegaciones, onClose, onCreated }) => {
+  const [values, setValues] = useState({ number: "", activa: true, delegacion: "", load_time: "", dock: null, departure_time: "" });
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     if (!values.number.trim()) { toast.error("Escribe un número/nombre de ruta"); return; }
+    if (!values.delegacion) { toast.error("Elige la delegación de la ruta"); return; }
     setSaving(true);
     try {
       const r = await createRouteConfig(values);
@@ -198,7 +205,7 @@ const NewModal = ({ onClose, onCreated }) => {
         <button data-testid="rc-new-close" onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
       </div>
       <div className="p-4 space-y-4">
-        <RouteForm values={values} setValues={setValues} />
+        <RouteForm values={values} setValues={setValues} delegaciones={delegaciones} />
         <Field label="Excel de paradas (opcional)">
           <label className="flex items-center gap-2 text-sm text-slate-300 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 cursor-pointer hover:border-slate-500">
             <Upload size={15} className="text-[#F26A21]" /> {file ? file.name : "Seleccionar archivo…"}
@@ -225,6 +232,7 @@ const Card = ({ r, onClick }) => (
         <div className="text-base font-bold text-white truncate">Ruta {r.number || "—"}</div>
         <div className="text-xs text-slate-400 flex items-center gap-1 truncate">
           <MapPin size={12} /> {r.stops_count || 0} paradas
+          {r.delegacion && <span className="ml-1 text-[10px] font-bold uppercase bg-slate-700/60 border border-slate-600 text-slate-200 rounded px-1.5 py-0.5">{r.delegacion}</span>}
         </div>
       </div>
     </div>
@@ -284,6 +292,7 @@ const ImportResultModal = ({ result, onClose }) => (
 
 export const RouteConfigPanel = () => {
   const [items, setItems] = useState([]);
+  const [delegaciones, setDelegaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newOpen, setNewOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
@@ -292,7 +301,7 @@ export const RouteConfigPanel = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const rc = await listRouteConfigs(); setItems(rc); }
+    try { const [rc, dg] = await Promise.all([listRouteConfigs(), listDelegaciones()]); setItems(rc); setDelegaciones(dg || []); }
     catch (e) { toast.error("No se pudieron cargar las rutas"); }
     finally { setLoading(false); }
   }, []);
@@ -343,8 +352,8 @@ export const RouteConfigPanel = () => {
         </button>
       </div>
 
-      {newOpen && <NewModal onClose={() => setNewOpen(false)} onCreated={load} />}
-      {detailId && <DetailModal id={detailId} onClose={() => setDetailId(null)} onChanged={load} />}
+      {newOpen && <NewModal delegaciones={delegaciones} onClose={() => setNewOpen(false)} onCreated={load} />}
+      {detailId && <DetailModal id={detailId} delegaciones={delegaciones} onClose={() => setDetailId(null)} onChanged={load} />}
       {importResult && <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />}
     </div>
   );

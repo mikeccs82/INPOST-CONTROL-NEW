@@ -805,6 +805,20 @@ async def optimize(req: OptimizeRequest):
     }
 
 
+async def _nave_for(name):
+    if not name:
+        return None
+    d = await db.delegaciones.find_one({"name": name}, {"_id": 0})
+    if not d:
+        return None
+    return {"id": d.get("id"), "name": f"Nave {name}", "address": d.get("nave_address", ""), "lat": d.get("nave_lat"), "lon": d.get("nave_lon")}
+
+
+@api_router.get("/delegaciones")
+async def list_delegaciones():
+    return await db.delegaciones.find({}, {"_id": 0}).sort("name", 1).to_list(100)
+
+
 @api_router.get("/settings")
 async def get_settings():
     doc = await db.settings.find_one({"id": "default"}, {"_id": 0})
@@ -968,6 +982,7 @@ class UserCreate(BaseModel):
     capacidad: str = ""
     tipologia: str = ""
     color: str = ""
+    delegaciones: List[str] = []
 
 
 class UserUpdate(BaseModel):
@@ -985,6 +1000,7 @@ class UserUpdate(BaseModel):
     capacidad: Optional[str] = None
     tipologia: Optional[str] = None
     color: Optional[str] = None
+    delegaciones: Optional[List[str]] = None
 
 
 class AssignmentBody(BaseModel):
@@ -1028,6 +1044,7 @@ class LocationBody(BaseModel):
 class RouteConfigBody(BaseModel):
     number: str = ""
     activa: bool = True
+    delegacion: Optional[str] = None
     driver_id: Optional[str] = None
     driver_ids: List[str] = []
     load_time: str = ""
@@ -1185,6 +1202,8 @@ async def list_users(admin=Depends(require_admin)):
 async def create_user(body: UserCreate, admin=Depends(require_admin)):
     if await db.users.find_one({"username": body.username}):
         raise HTTPException(400, "Ese usuario ya existe")
+    if not body.delegaciones:
+        raise HTTPException(400, "Debes seleccionar al menos una delegación")
     doc = body.model_dump()
     is_admin = doc.pop("is_admin", False)
     pw = doc.pop("password")
@@ -1361,6 +1380,13 @@ async def build_my_route(user=Depends(get_current_user)):
     end = st.get("end")
     same = st.get("same_as_start", True)
     sbt = st.get("service_by_type") or {}
+
+    # La nave de salida/retorno viene de la DELEGACIÓN de la ruta (escalable por delegación).
+    nave = await _nave_for(rc.get("delegacion"))
+    if nave:
+        start = nave
+        end = None
+        same = True
 
     stop_models = []
     for s in recognized:
@@ -1908,6 +1934,23 @@ async def _seed_admin():
         })
     elif not bcrypt.checkpw(ap.encode(), ex["password_hash"].encode()):
         await db.users.update_one({"username": au}, {"$set": {"password_hash": bcrypt.hashpw(ap.encode(), bcrypt.gensalt()).decode()}})
+
+
+DELEGACIONES_SEED = [
+    {"name": "Barcelona", "nave_address": "Carrer de les Oliveres, 1, 08800 Vilanova i la Geltrú, Barcelona", "nave_lat": 41.2462526, "nave_lon": 1.722634},
+    {"name": "Madrid", "nave_address": "C. Tales de Mileto, 2, 28806 Alcalá de Henares, Madrid", "nave_lat": 40.4928504, "nave_lon": -3.3927735},
+]
+
+
+@app.on_event("startup")
+async def _seed_delegaciones():
+    for d in DELEGACIONES_SEED:
+        await db.delegaciones.update_one(
+            {"name": d["name"]},
+            {"$setOnInsert": {"id": str(uuid.uuid4()), **d}},
+            upsert=True,
+        )
+
 
 
 @app.on_event("startup")

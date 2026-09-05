@@ -18,7 +18,7 @@ import { UsersDialog } from "./components/UsersDialog";
 import { ExportNameModal } from "./components/ExportNameModal";
 import {
   importExcel, optimizeRoute, computeRoute, saveRoute, exportRoute,
-  getSettings, saveSettings, listRouteConfigs, getRouteConfig, saveSimulation,
+  getSettings, saveSettings, listRouteConfigs, getRouteConfig, saveSimulation, listDelegaciones,
 } from "./lib/api";
 import { fmtDistance, fmtDuration } from "./lib/format";
 import "./App.css";
@@ -47,6 +47,7 @@ function App({ user, onLogout, onBack }) {
   const [simMode, setSimMode] = useState(null); // null=gate, 'route', 'free'
   const [targetRoute, setTargetRoute] = useState(null); // {id, number}
   const [routeConfigs, setRouteConfigs] = useState([]);
+  const [delegaciones, setDelegaciones] = useState([]);
   const [gateLoading, setGateLoading] = useState(false);
   const [assignSimOpen, setAssignSimOpen] = useState(false);
   const [assigningSim, setAssigningSim] = useState(false);
@@ -55,7 +56,7 @@ function App({ user, onLogout, onBack }) {
   const loadRouteConfigs = useCallback(() => {
     listRouteConfigs().then(setRouteConfigs).catch(() => {});
   }, []);
-  useEffect(() => { loadRouteConfigs(); }, [loadRouteConfigs]);
+  useEffect(() => { loadRouteConfigs(); listDelegaciones().then(setDelegaciones).catch(() => {}); }, [loadRouteConfigs]);
 
   useEffect(() => {
     getSettings()
@@ -324,6 +325,16 @@ function App({ user, onLogout, onBack }) {
       const loaded = applyService((r.stops || []).map((s) => ({ ...s, id: s.id || genId() })));
       setStops(loaded);
       setTargetRoute({ id: r.id, number: r.number });
+      // La nave de salida/retorno de la simulación es la de la delegación de la ruta.
+      const dg = delegaciones.find((d) => d.name === r.delegacion);
+      if (dg) {
+        setWarehouse((w) => ({
+          ...w,
+          start: { id: dg.id, name: `Nave ${dg.name}`, address: dg.nave_address, lat: dg.nave_lat, lon: dg.nave_lon },
+          end: null,
+          sameAsStart: true,
+        }));
+      }
       setSimMode("route");
       clearRoute();
       if (loaded.length === 0) toast.info("Esta ruta no tiene paradas. Importa un Excel para simular.");

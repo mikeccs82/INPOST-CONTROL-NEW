@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { X, Users, UserPlus, Trash2, Pencil, ArrowLeft, Save, MessageCircle, ShieldCheck } from "lucide-react";
-import { listUsers, createUser, updateUser, removeUser } from "../lib/api";
+import { listUsers, createUser, updateUser, removeUser, listDelegaciones } from "../lib/api";
 import { toast } from "sonner";
 
-const EMPTY = { username: "", password: "", is_admin: false, baja: false, nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "" };
+const EMPTY = { username: "", password: "", is_admin: false, baja: false, nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "", delegaciones: [] };
 const CAPS = ["L1H1", "L2H2", "L3H2", "L4H3"];
 const inp = "w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]";
 
@@ -29,13 +29,19 @@ export const UsersDialog = ({ open, onClose }) => {
   const [mode, setMode] = useState("list");
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState(null);
+  const [delegaciones, setDelegaciones] = useState([]);
 
   const refresh = () => listUsers().then(setUsers).catch(() => toast.error("No se pudieron cargar"));
-  useEffect(() => { if (open) { setMode("list"); refresh(); } }, [open]);
+  useEffect(() => { if (open) { setMode("list"); refresh(); listDelegaciones().then(setDelegaciones).catch(() => {}); } }, [open]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleDeleg = (name) => setForm((f) => {
+    const cur = f.delegaciones || [];
+    return { ...f, delegaciones: cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name] };
+  });
 
   const save = async () => {
     if (!form.username.trim() || (!editId && !form.password.trim())) { toast.error("Usuario y contraseña obligatorios"); return; }
+    if (!form.delegaciones || form.delegaciones.length === 0) { toast.error("Selecciona al menos una delegación"); return; }
     try {
       if (editId) { const p = { ...form }; if (!p.password) delete p.password; await updateUser(editId, p); toast.success("Usuario actualizado"); }
       else { await createUser(form); toast.success(form.is_admin ? "Administrador creado" : "Conductor creado"); }
@@ -101,6 +107,20 @@ export const UsersDialog = ({ open, onClose }) => {
                 <span className="text-sm text-white font-semibold">Baja</span>
                 <span className="text-xs text-slate-500 ml-auto">si está marcado, no puede entrar</span>
               </label>
+              <div data-testid="user-delegaciones">
+                <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-1.5">Delegación (obligatorio · una o varias)</p>
+                <div className="flex flex-wrap gap-2">
+                  {delegaciones.map((d) => {
+                    const on = (form.delegaciones || []).includes(d.name);
+                    return (
+                      <button key={d.name} type="button" data-testid={`user-deleg-${d.name}`} onClick={() => toggleDeleg(d.name)}
+                        className={`text-sm font-semibold px-3.5 py-2 rounded-md border transition-colors ${on ? "bg-[#F26A21] border-[#F26A21] text-white" : "bg-slate-900 border-slate-600 text-slate-300 hover:border-slate-400"}`}>
+                        {d.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Datos personales</p>
               <div className="grid grid-cols-2 gap-3">
                 <F label="Nombres" k="nombres" form={form} set={set} />

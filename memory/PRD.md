@@ -215,3 +215,11 @@
 - Optimización respeta horarios (VRPTW OR-Tools: ventana apertura = SetMin, cierre = soft upper bound con penalización) y ahora penaliza el TIEMPO TOTAL con SetSpanCostCoefficientForVehicle(3,0) para minimizar esperas: si sale temprano y los PUDO están cerrados, evita esperar y prioriza los puntos abiertos/24h (L24 o ventana amplia), y encaja los PUDO dentro de su ventana antes de cerrar. Minutos por tipo (service_by_type, incl. L24) se aplican en el build (sbt).
 - Bloqueo previo: en "Ordenar Ruta" tipo y horario son solo lectura; se quitó la latitud/longitud de esa lista.
 - Verificado por curl (repeat-last copia 5 paradas del 2026-09-04 + build con nave/round_trip) y captura (filas salida/retorno, botones, horarios/tipos, S/E en mapa).
+
+## Delegaciones (nave por delegación) + obligatorio en usuarios (2026-09-05)
+- Nueva entidad Delegación (colección `delegaciones`, seed idempotente al arrancar): Barcelona (nave Carrer de les Oliveres, 1, Vilanova i la Geltrú, 41.2462526/1.722634) y Madrid (nave C. Tales de Mileto, 2, Alcalá de Henares, 40.4928504/-3.3927735). GET /api/delegaciones.
+- Usuario (conductor Y admin): campo `delegaciones` (lista) OBLIGATORIO al crear (backend valida no vacío). UsersDialog: multi-selección Barcelona/Madrid (botones toggle), valida antes de guardar.
+- Route config: campo `delegacion` (una por ruta). RouteConfigPanel: selector de delegación (obligatorio al crear). La nave de SALIDA y RETORNO sale de la delegación de la ruta.
+- build_my_route (conductor Optimizar/Repetir) usa _nave_for(rc.delegacion) como start + round_trip. Simulación admin (App.js chooseRouteToSim) fija warehouse.start = nave de la delegación de la ruta.
+- Datos existentes migrados: driver 1111 y admin -> delegaciones ["Barcelona"]; las 11 rutas -> delegacion "Barcelona".
+- Verificado: GET delegaciones, crear usuario sin delegación=400, build usa "Nave Barcelona" con coords correctas, UI (selector en ruta y en usuario).
