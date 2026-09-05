@@ -159,7 +159,11 @@
 - Datos de prueba sembrados (scripts/seed_past_days.py) para el conductor 1122: 2 días anteriores que salieron a ruta — 2026-09-03 (completo) y 2026-09-04 (con incidencias: vuelvo, cerrado definitivo, y una entrega con problema).
 - Verificado por curl (editable/dates por fecha) y capturas (los 3 pasos en día pasado, solo lectura).
 
-## Vínculo Reparto -> Carga del furgón (2026-06-09)
+## Guía visual + pantalla de entrada en Ordenar Sacas (2026-06-09)
+- Foto de etiqueta enderezada (CCW) y mejorada (contraste/nitidez); guardada en /app/frontend/public/saca-ejemplo.jpg.
+- Dibujados 2 recuadros rojos con etiquetas: "RUTA" junto a Zona de reparto (8014) y "PARADA ID" junto a los últimos 4 dígitos del Identificador de punto (4346).
+- SacasSort: pantalla de entrada (estado `intro`) al abrir la sección: muestra la imagen + 2 instrucciones + botón "Siguiente" (data-testid sacas-intro-next) que lleva a la pantalla de ordenar sacas. Imagen servida como /saca-ejemplo.jpg?v=3.
+- Verificado por captura (intro -> Siguiente -> pantalla de búsqueda).
 - CargaLista ahora carga también myReparto(date) y calcula deliveredIds (paradas con progress.delivered en reparto).
 - En la lista "Ingresadas al furgón": si una parada ya está ENTREGADA en Reparto, muestra la etiqueta verde "Entregada al destinatario" y NO permite "Devolver a nave" (botón oculto). Las no entregadas mantienen "Devolver a nave" (en días editables).
 - Verificado por captura (día 2026-09-04: paradas 1 y 4 entregadas -> etiqueta; sin devolver).

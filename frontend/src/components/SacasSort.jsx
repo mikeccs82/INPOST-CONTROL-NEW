@@ -59,7 +59,7 @@ export const SacasSort = ({ onNext }) => {
   const [today, setToday] = useState(null);
   const [editable, setEditable] = useState(true);
   const [dates, setDates] = useState([]);
-  const [showHelp, setShowHelp] = useState(true);
+  const [intro, setIntro] = useState(true);
   const recRef = useRef(null);
   const posRef = useRef(positions);
   const isoRef = useRef(isolated);
@@ -184,6 +184,30 @@ export const SacasSort = ({ onNext }) => {
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
 
+  if (intro) return (
+    <div data-testid="sacas-intro" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-xl font-bold text-white mb-1">Ordenar Sacas</h1>
+        <p className="text-sm text-slate-400 mb-4">Antes de empezar, así se lee la etiqueta de cada saca:</p>
+        <img src="/saca-ejemplo.jpg?v=3" alt="Ejemplo de etiqueta de saca" className="w-full rounded-xl border border-slate-700 mb-4" />
+        <div className="space-y-2 text-sm mb-5">
+          <div className="flex items-start gap-2 rounded-lg bg-slate-900 border border-slate-700 p-3">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-[#F26A21] text-white text-xs font-bold flex items-center justify-center">1</span>
+            <p className="text-slate-200"><span className="font-bold text-white">PARADA ID</span> — en <span className="font-bold text-white">"Identificador de punto"</span> (ej. <span className="font-mono-tech text-[#F26A21]">ES074346</span>) toma los <span className="font-bold text-white">últimos 4 dígitos</span> (<span className="font-mono-tech text-[#F26A21]">4346</span>) para buscar la saca.</p>
+          </div>
+          <div className="flex items-start gap-2 rounded-lg bg-slate-900 border border-slate-700 p-3">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-[#1E5AA8] text-white text-xs font-bold flex items-center justify-center">2</span>
+            <p className="text-slate-200"><span className="font-bold text-white">RUTA</span> — la <span className="font-bold text-white">"Zona de reparto"</span> (ej. <span className="font-mono-tech text-[#4b8fe0]">8014</span>) es tu número de ruta, el mismo que aparece arriba.</p>
+          </div>
+        </div>
+        <button data-testid="sacas-intro-next" onClick={() => setIntro(false)}
+          className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98]">
+          Siguiente <ArrowRight size={22} />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div data-testid="sacas-sort" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
       <div className="max-w-2xl mx-auto">
@@ -237,31 +261,6 @@ export const SacasSort = ({ onNext }) => {
             <AlertTriangle size={16} /> No tienes paradas asignadas todavía.
           </div>
         )}
-
-        {/* Ayuda: cómo leer la etiqueta */}
-        <div className="mb-4 rounded-xl border border-[#1E5AA8]/40 bg-[#1E5AA8]/10 overflow-hidden">
-          <button data-testid="sacas-help-toggle" onClick={() => setShowHelp((v) => !v)}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-            <Info size={16} className="text-[#4b8fe0] shrink-0" />
-            <span className="text-sm font-bold text-white flex-1">¿Cómo leer la etiqueta de la saca?</span>
-            {showHelp ? <ChevronUp size={16} className="text-slate-300" /> : <ChevronDown size={16} className="text-slate-300" />}
-          </button>
-          {showHelp && (
-            <div className="px-3 pb-3">
-              <img src="/saca-ejemplo.jpg?v=2" alt="Ejemplo de etiqueta de saca" className="w-full rounded-lg border border-slate-700 mb-3" />
-              <div className="space-y-2 text-sm">
-                <div className="flex items-start gap-2 rounded-lg bg-slate-900 border border-slate-700 p-2.5">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-[#F26A21] text-white text-xs font-bold flex items-center justify-center">1</span>
-                  <p className="text-slate-200">Busca <span className="font-bold text-white">"Identificador de punto"</span> (ej. <span className="font-mono-tech text-[#F26A21]">ES074346</span>). Toma los <span className="font-bold text-white">últimos 4 dígitos</span> (<span className="font-mono-tech text-[#F26A21]">4346</span>) y escríbelos o dilos por voz para buscar la saca.</p>
-                </div>
-                <div className="flex items-start gap-2 rounded-lg bg-slate-900 border border-slate-700 p-2.5">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-[#1E5AA8] text-white text-xs font-bold flex items-center justify-center">2</span>
-                  <p className="text-slate-200"><span className="font-bold text-white">"Zona de reparto"</span> (ej. <span className="font-mono-tech text-[#4b8fe0]">8014</span>) es tu <span className="font-bold text-white">número de ruta</span>, el mismo que aparece arriba.</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Search */}
         {editable && (
