@@ -84,7 +84,7 @@ export const myRoute = async (date) => (await client.get("/my/route", { params: 
 export const myDates = async () => (await client.get("/my/dates")).data;
 export const updateMyOrder = async (date, stops) => (await client.put("/my/route/order", { date, stops })).data;
 export const saveStopComment = async (stopId, comment) => (await client.put("/my/route/comment", { stop_id: stopId, comment })).data;
-export const mySacas = async () => (await client.get("/my/sacas")).data;
+export const mySacas = async (date) => (await client.get("/my/sacas", { params: date ? { date } : {} })).data;
 export const saveMySacas = async (payload) => (await client.put("/my/sacas", payload)).data;
 export const myRouteConfig = async () => (await client.get("/my/route-config")).data;
 export const buildMyRoute = async () => (await client.post("/my/route/build")).data;

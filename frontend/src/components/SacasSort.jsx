@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight } from "lucide-react";
+import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight, CalendarDays, Lock } from "lucide-react";
 import { mySacas, saveMySacas, buildMyRoute } from "../lib/api";
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
@@ -37,6 +37,14 @@ const wordsToDigits = (text) => {
   return out;
 };
 
+const fmtDate = (d) => {
+  try {
+    const [y, m, day] = d.split("-").map(Number);
+    const s = new Date(y, m - 1, day).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch { return d; }
+};
+
 export const SacasSort = ({ onNext }) => {
   const [loading, setLoading] = useState(true);
   const [stops, setStops] = useState([]);
@@ -47,6 +55,10 @@ export const SacasSort = ({ onNext }) => {
   const [pending, setPending] = useState(null); // {last4, kind:'new'|'existing'|'unknown', position, stopName}
   const [listening, setListening] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [date, setDate] = useState(null);
+  const [today, setToday] = useState(null);
+  const [editable, setEditable] = useState(true);
+  const [dates, setDates] = useState([]);
   const recRef = useRef(null);
   const posRef = useRef(positions);
   const isoRef = useRef(isolated);
@@ -55,21 +67,30 @@ export const SacasSort = ({ onNext }) => {
 
   const speechOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  useEffect(() => {
-    mySacas().then((d) => {
-      setStops(d.stops || []);
-      setRouteNumber(d.route_number);
-      setPositions(d.session?.positions || []);
-      setIsolated(d.session?.isolated || []);
+  const load = useCallback((d) => {
+    setLoading(true);
+    setPending(null);
+    mySacas(d).then((data) => {
+      setStops(data.stops || []);
+      setRouteNumber(data.route_number);
+      setPositions(data.session?.positions || []);
+      setIsolated(data.session?.isolated || []);
+      setDate(data.date);
+      setToday(data.today);
+      setEditable(!!data.editable);
+      setDates(data.dates || []);
     }).catch(() => toast.error("No se pudo cargar la información de sacas"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const persist = useCallback((pos, iso) => {
     saveMySacas({ positions: pos, isolated: iso }).catch(() => toast.error("No se pudo guardar"));
   }, []);
 
   const resolve = useCallback((raw) => {
+    if (!editable) { toast.error("Los días anteriores son solo lectura"); return; }
     const q = last4(raw);
     if (!q) { toast.error("No se detectó ningún número"); return; }
     const match = stops.find((s) => last4(s.order_id) === q && digits(s.order_id));
@@ -84,7 +105,7 @@ export const SacasSort = ({ onNext }) => {
     } else {
       setPending({ last4: q, kind: "unknown", position: null, stopName: "", stopAddress: "" });
     }
-  }, [stops]);
+  }, [stops, editable]);
 
   const addrOf = useCallback((q) => (stops.find((s) => last4(s.order_id) === q && digits(s.order_id))?.address || ""), [stops]);
 
@@ -170,15 +191,45 @@ export const SacasSort = ({ onNext }) => {
           <button
             data-testid="sacas-next-step"
             onClick={nextStep}
-            disabled={building || positions.length === 0}
+            disabled={building || positions.length === 0 || !editable}
             className="shrink-0 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold px-3.5 py-2 rounded-lg transition-colors"
           >
             {building ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />} Siguiente paso
           </button>
         </div>
+
+        {/* Fecha del día + selector de días anteriores */}
+        <div className="flex items-center justify-between gap-2 mb-3 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <CalendarDays size={18} className="text-[#F26A21] shrink-0" />
+            <div className="min-w-0">
+              <div data-testid="sacas-date" className="text-sm font-bold text-white truncate">{date ? fmtDate(date) : ""}</div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">{editable ? "Trabajando en hoy" : "Solo lectura"}</div>
+            </div>
+          </div>
+          {dates.length > 1 && (
+            <select
+              data-testid="sacas-date-select"
+              value={date || ""}
+              onChange={(e) => load(e.target.value)}
+              className="shrink-0 bg-slate-800 border border-slate-600 text-white text-xs font-semibold rounded-md px-2 py-1.5 outline-none focus:border-[#F26A21]"
+            >
+              {dates.map((d) => (
+                <option key={d} value={d}>{d === today ? "Hoy" : d}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         <p className="text-sm text-slate-400 mb-4">
           {routeNumber ? `Ruta ${routeNumber} · ` : ""}Di o escribe los últimos 4 dígitos del ID de orden
         </p>
+
+        {!editable && (
+          <div className="mb-4 rounded-lg bg-slate-800/60 border border-slate-600 p-3 text-sm text-slate-300 flex items-center gap-2">
+            <Lock size={16} className="text-slate-400" /> Estás viendo un día anterior. No puedes modificarlo.
+          </div>
+        )}
 
         {stops.length === 0 && (
           <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-300 flex items-center gap-2">
@@ -187,6 +238,7 @@ export const SacasSort = ({ onNext }) => {
         )}
 
         {/* Search */}
+        {editable && (
         <form onSubmit={submitText} className="flex gap-2 mb-3">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -211,6 +263,7 @@ export const SacasSort = ({ onNext }) => {
             {listening ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
         </form>
+        )}
         {listening && <p className="text-xs text-red-400 mb-3 flex items-center gap-1.5"><Mic size={12} /> Escuchando… di el número</p>}
 
         {/* Pending prompt */}

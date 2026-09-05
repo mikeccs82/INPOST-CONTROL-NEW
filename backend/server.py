@@ -1140,25 +1140,45 @@ async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
 
 
 @api_router.get("/my/sacas")
-async def my_sacas(user=Depends(get_current_user)):
+async def my_sacas(date: Optional[str] = None, user=Depends(get_current_user)):
     rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0})
-    if not rc:
-        return {"route_number": None, "stops": [], "session": {"positions": [], "isolated": []}}
+    d = date or _today()
+    doc = await db.saca_day_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    # Migración: si es hoy y no hay sesión diaria pero existe la antigua en route_config, úsala
+    if not doc and d == _today() and rc and rc.get("saca_session"):
+        doc = {**rc["saca_session"], "date": d}
+    session = {"positions": (doc or {}).get("positions", []), "isolated": (doc or {}).get("isolated", [])}
+    day_docs = await db.saca_day_sessions.find({"driver_id": user["id"]}, {"_id": 0, "date": 1}).to_list(365)
+    date_list = sorted({x["date"] for x in day_docs} | {_today()}, reverse=True)
     return {
-        "route_number": rc.get("number"),
-        "stops": rc.get("stops", []),
-        "session": rc.get("saca_session") or {"positions": [], "isolated": []},
+        "route_number": rc.get("number") if rc else None,
+        "stops": rc.get("stops", []) if rc else [],
+        "date": d,
+        "today": _today(),
+        "editable": d == _today(),
+        "session": session,
+        "dates": date_list,
     }
 
 
 @api_router.put("/my/sacas")
 async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
-    rc = await db.route_configs.find_one({"driver_id": user["id"]})
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0, "id": 1})
     if not rc:
         raise HTTPException(404, "No tienes ruta asignada")
-    await db.route_configs.update_one(
-        {"id": rc["id"]},
-        {"$set": {"saca_session": body.model_dump(), "saca_updated_at": datetime.now(timezone.utc).isoformat()}},
+    d = _today()
+    data = body.model_dump()
+    await db.saca_day_sessions.update_one(
+        {"driver_id": user["id"], "date": d},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": d,
+            "route_config_id": rc["id"],
+            "positions": data.get("positions", []),
+            "isolated": data.get("isolated", []),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
     )
     return {"ok": True}
 
@@ -1176,7 +1196,10 @@ async def build_my_route(user=Depends(get_current_user)):
     rc = await db.route_configs.find_one({"driver_id": user["id"]})
     if not rc:
         raise HTTPException(404, "No tienes ruta asignada")
-    session = rc.get("saca_session") or {}
+    session = await db.saca_day_sessions.find_one({"driver_id": user["id"], "date": _today()}, {"_id": 0})
+    if not session and rc.get("saca_session"):
+        session = rc.get("saca_session")
+    session = session or {}
     ids = [p.get("stop_id") for p in (session.get("positions") or []) if p.get("stop_id")]
     stops_by_id = {s["id"]: s for s in rc.get("stops", [])}
     recognized = [stops_by_id[i] for i in ids if i in stops_by_id]
