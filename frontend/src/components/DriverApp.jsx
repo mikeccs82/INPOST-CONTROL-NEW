@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Toaster, toast } from "sonner";
-import { LogOut, Truck, ArrowLeft, PackageCheck, Loader2 } from "lucide-react";
+import { LogOut, Truck, ArrowLeft, PackageCheck, Loader2, ArrowRight } from "lucide-react";
 import { MapView } from "./MapView";
 import { StopList } from "./StopList";
 import { DriverDashboard } from "./DriverDashboard";
@@ -81,12 +81,24 @@ export const DriverApp = ({ user, onLogout }) => {
           onOpenRoute={() => setScreen("route")}
           onOpenParadas={() => setScreen("paradas")}
           onOpenSacas={() => setScreen("sacas")}
+          onOpenCarga={() => setScreen("carga")}
           onSoon={(label) => toast.info(`${label}: Próximamente`)}
           onLogout={onLogout}
         />
       )}
 
       {screen === "sacas" && <SacasSort onNext={openRoute} />}
+
+      {screen === "carga" && (
+        <div data-testid="carga-view" className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-slate-950">
+          <div className="w-16 h-16 rounded-2xl bg-[#2563EB]/15 border border-[#2563EB]/40 flex items-center justify-center mb-4">
+            <Truck size={32} className="text-[#2563EB]" />
+          </div>
+          <h1 className="text-xl font-bold text-white mb-1">Carga del vehículo</h1>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#2563EB] mb-3">Paso 3</p>
+          <p className="text-slate-400 text-sm">Próximamente</p>
+        </div>
+      )}
 
       {screen === "paradas" && (
         <RouteStopsView stops={allStops} routeName={routeNumber ? `Ruta ${routeNumber}` : null} />
@@ -97,7 +109,13 @@ export const DriverApp = ({ user, onLogout }) => {
           <div className="shrink-0 bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center gap-2">
             <PackageCheck size={15} className="text-[#F26A21]" />
             <span className="text-xs text-slate-300">{stops.length} paradas ordenadas</span>
-            {summary && <span className="ml-auto text-[11px] font-mono-tech text-slate-300">{fmtDistance(summary.distance)} · {fmtDuration(summary.duration)}</span>}
+            {summary && <span className="text-[11px] font-mono-tech text-slate-300">{fmtDistance(summary.distance)} · {fmtDuration(summary.duration)}</span>}
+            {driverRoute && (
+              <button data-testid="route-next-step" onClick={() => setScreen("carga")}
+                className="ml-auto flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-colors">
+                Siguiente <ArrowRight size={14} />
+              </button>
+            )}
           </div>
 
           {routeLoading ? (

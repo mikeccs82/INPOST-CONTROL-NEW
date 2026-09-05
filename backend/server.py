@@ -92,12 +92,16 @@ class RouteRequest(BaseModel):
 
 class Settings(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    start: Optional[Waypoint] = None
+    start: Optional[Waypoint] = Field(default_factory=lambda: Waypoint(
+        name="Nave Vilanova i la Geltrú",
+        address="Carrer de les Oliveres, 1, 08800 Vilanova i la Geltrú, Barcelona",
+        lat=41.2462526, lon=1.722634,
+    ))
     end: Optional[Waypoint] = None
     same_as_start: bool = True
     service_time_min: float = 0
     service_by_type: Dict[str, float] = Field(default_factory=lambda: {"P": 0, "PD": 0, "L": 0})
-    departure_time: Optional[str] = None
+    departure_time: Optional[str] = "08:00"
     respect_windows: bool = True
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

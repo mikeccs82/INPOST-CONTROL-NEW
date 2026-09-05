@@ -90,3 +90,9 @@
 - Legacy sin usar (candidatos a limpiar): /api/my/route (assignments), /api/my/dates, /api/my/route/order.
 - Probado: testing agent iteration_10 (5/5 backend, 100% frontend, 0 bugs) + capturas. Mejora aplicada: spinner para evitar parpadeo del estado vacío.
 - PENDIENTE usuario: redeploy para que llegue a emergent.host.
+
+## Nave por defecto + Siguiente a Carga (2026-06-05)
+- Nave por defecto: Carrer de les Oliveres, 1, 08800 Vilanova i la Geltrú, Barcelona (lat 41.2462526, lon 1.722634). Configurada en el modelo Settings (default start) y en la BD. departure_time por defecto 08:00.
+- "Ordenar ruta" (Paso 2): botón "Siguiente" (route-next-step, arriba dcha) -> pantalla "Carga del vehículo" (Paso 3, screen 'carga', placeholder Próximamente). Dashboard card 'carga' también abre esta pantalla.
+- Probado por captura + curl (build optimiza desde Vilanova).
+- PENDIENTE usuario: redeploy para emergent.host.
