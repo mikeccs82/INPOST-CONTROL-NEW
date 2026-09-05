@@ -74,3 +74,10 @@
 - deployment_agent: status WARN, SIN bloqueadores. Env vars OK, sin secretos/URLs hardcodeadas, /api prefijado, CORS OK, compila OK, supervisor OK, seed idempotente.
 - Único WARN: N+1 en GET /api/route-configs -> OPTIMIZADO (batch $in de driver_ids + _enrich_config(doc, users_map)). Verificado testing agent iteration_9 (28/28 backend, sin regresión).
 - App lista para desplegar. Nota: to_list(1000) limita listas a 1000 (suficiente a escala actual).
+
+## Ajustes visuales Ordenar Sacas (2026-06-05)
+- Tarjeta de resultado: "Posición N" MUCHO más grande (text-5xl), y bajo el nombre del establecimiento se muestra la DIRECCIÓN de entrega (obtenida de las paradas por last4).
+- Lista de ubicados: los 4 dígitos en grande (text-3xl) + dirección debajo + nombre en pequeño + contadores saca/bulto.
+- addrOf(last4) busca la dirección en los stops del route_config.
+- Estado BD preview: solo queda conductor 1122/1122 (mike); Ruta 8010 reasignada a 1122 (36 paradas). Los demás conductores fueron borrados.
+- PENDIENTE usuario: redeploy para que estos cambios lleguen a emergent.host.

@@ -40,18 +40,21 @@ export const SacasSort = () => {
   const resolve = useCallback((raw) => {
     const q = last4(raw);
     if (!q) { toast.error("No se detectó ningún número"); return; }
+    const match = stops.find((s) => last4(s.order_id) === q && digits(s.order_id));
+    const addr = match?.address || "";
     const existing = posRef.current.find((p) => p.last4 === q);
     if (existing) {
-      setPending({ last4: q, kind: "existing", position: existing.position, stopName: existing.stop_name });
+      setPending({ last4: q, kind: "existing", position: existing.position, stopName: existing.stop_name, stopAddress: addr });
       return;
     }
-    const match = stops.find((s) => last4(s.order_id) === q && digits(s.order_id));
     if (match) {
-      setPending({ last4: q, kind: "new", position: posRef.current.length + 1, stopName: match.name || "Parada", stopId: match.id });
+      setPending({ last4: q, kind: "new", position: posRef.current.length + 1, stopName: match.name || "Parada", stopAddress: addr, stopId: match.id });
     } else {
-      setPending({ last4: q, kind: "unknown", position: null, stopName: "" });
+      setPending({ last4: q, kind: "unknown", position: null, stopName: "", stopAddress: "" });
     }
   }, [stops]);
+
+  const addrOf = useCallback((q) => (stops.find((s) => last4(s.order_id) === q && digits(s.order_id))?.address || ""), [stops]);
 
   const submitText = (e) => { e.preventDefault(); resolve(query); };
 
@@ -158,19 +161,23 @@ export const SacasSort = () => {
           <div data-testid="sacas-prompt" className="mb-4 rounded-xl border p-4 animate-in fade-in"
             style={{ borderColor: pending.kind === "unknown" ? "#f59e0b66" : "#F26A2166", backgroundColor: pending.kind === "unknown" ? "#f59e0b12" : "#F26A2112" }}>
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-2xl font-mono-tech font-bold text-white">{pending.last4}</div>
+              <div className="min-w-0 flex-1">
                 {pending.kind === "unknown" ? (
-                  <p className="text-sm text-amber-300 flex items-center gap-1.5 mt-1"><AlertTriangle size={15} /> Parada no reconocida</p>
+                  <>
+                    <div className="text-4xl font-mono-tech font-extrabold text-white leading-none">{pending.last4}</div>
+                    <p className="text-base font-bold text-amber-300 flex items-center gap-1.5 mt-2"><AlertTriangle size={17} /> Parada no reconocida</p>
+                  </>
                 ) : (
                   <>
-                    <p className="text-base font-bold text-[#F26A21] mt-0.5">Posición {pending.position}</p>
-                    <p className="text-xs text-slate-300 flex items-center gap-1 truncate"><MapPin size={12} /> {pending.stopName}</p>
-                    {pending.kind === "existing" && <p className="text-[11px] text-slate-400 mt-0.5">Ya existente · añade a este montón</p>}
+                    <div className="text-sm font-mono-tech text-slate-400">···{pending.last4}</div>
+                    <p className="text-5xl font-extrabold text-[#F26A21] leading-none mt-1">Posición {pending.position}</p>
+                    <p className="text-lg font-bold text-white mt-3 flex items-center gap-1.5"><MapPin size={17} className="shrink-0 text-[#F26A21]" /> {pending.stopName}</p>
+                    {pending.stopAddress && <p className="text-sm text-slate-300 mt-0.5 pl-6">{pending.stopAddress}</p>}
+                    {pending.kind === "existing" && <p className="text-[11px] text-slate-400 mt-1">Ya existente · añade a este montón</p>}
                   </>
                 )}
               </div>
-              <button data-testid="sacas-cancel" onClick={() => { setPending(null); setQuery(""); }} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              <button data-testid="sacas-cancel" onClick={() => { setPending(null); setQuery(""); }} className="text-slate-400 hover:text-white shrink-0"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3">
               {pending.kind === "unknown" ? (
@@ -213,12 +220,13 @@ export const SacasSort = () => {
             <div key={p.position} data-testid={`sacas-pos-${p.position}`} className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex items-center gap-3">
               <div className="shrink-0 w-9 h-9 flex items-center justify-center font-mono-tech font-bold bg-[#F26A21] text-white rounded-full">{p.position}</div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-white truncate">{p.stop_name}</div>
-                <div className="text-[11px] text-slate-400 font-mono-tech">···{p.last4}</div>
+                <div className="text-3xl font-mono-tech font-extrabold text-white leading-none">···{p.last4}</div>
+                {addrOf(p.last4) && <div className="text-xs text-slate-300 mt-1 truncate">{addrOf(p.last4)}</div>}
+                <div className="text-[11px] text-slate-500 truncate">{p.stop_name}</div>
               </div>
-              <div className="text-xs text-slate-300 flex items-center gap-3 shrink-0">
-                <span className="flex items-center gap-1"><ShoppingBag size={13} className="text-[#F26A21]" /> {p.sacas}</span>
-                <span className="flex items-center gap-1"><Package size={13} className="text-[#1E5AA8]" /> {p.bultos}</span>
+              <div className="text-sm text-slate-300 flex flex-col items-end gap-1 shrink-0">
+                <span className="flex items-center gap-1"><ShoppingBag size={14} className="text-[#F26A21]" /> {p.sacas}</span>
+                <span className="flex items-center gap-1"><Package size={14} className="text-[#1E5AA8]" /> {p.bultos}</span>
               </div>
             </div>
           ))}
