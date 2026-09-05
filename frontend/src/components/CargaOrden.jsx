@@ -32,13 +32,13 @@ export const CargaOrden = ({ count = 4 }) => {
           </div>
           <svg viewBox="0 0 340 180" className="w-full h-auto" role="img" aria-label="Orden de carga">
             {/* Cargo box */}
-            <rect x="24" y="24" width="240" height="104" rx="10" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+            <rect x="24" y="24" width="240" height="104" rx="10" fill="#64748b" stroke="#94a3b8" strokeWidth="2" />
             {/* Cabin */}
             <path d="M264 44 h34 a8 8 0 0 1 6 3 l14 22 a10 10 0 0 1 2 6 v30 a6 6 0 0 1 -6 6 h-50 z"
-              fill="#F26A21" opacity="0.85" />
+              fill="#F26A21" opacity="0.9" />
             {/* Reserved pickup zone (front-lateral) */}
-            <rect x="228" y="34" width="30" height="84" rx="5" fill="#22c55e" opacity="0.18" stroke="#22c55e" strokeWidth="2" strokeDasharray="5 4" />
-            <text x="243" y="128" textAnchor="middle" fontSize="8" fontWeight="700" fill="#22c55e">RECOG.</text>
+            <rect x="224" y="34" width="34" height="84" rx="5" fill="#22c55e" opacity="0.22" stroke="#15803d" strokeWidth="2" strokeDasharray="5 4" />
+            <text x="241" y="76" textAnchor="middle" fontSize="8" fontWeight="700" fill="#14532d" transform="rotate(-90 241 76)">recogidas</text>
 
             {/* Boxes loaded last->first */}
             {boxes.map((b) => (
