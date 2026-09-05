@@ -237,10 +237,14 @@ export const RepartoView = () => {
                   {isCur && !badge && <span className="text-[10px] font-bold uppercase text-[#F26A21] shrink-0">Actual</span>}
                 </button>
                 {sel && (
-                  <div className="px-3 pb-3">
+                  <div className="px-3 pb-3 space-y-2">
                     <button data-testid={`reparto-ir-list-${i + 1}`} onClick={() => irA(s)}
-                      className="w-full flex items-center justify-center gap-2 bg-[#1E5AA8] hover:bg-[#184a8c] text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
+                      className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
                       <Navigation size={16} /> Ir con Google Maps
+                    </button>
+                    <button data-testid={`reparto-atsite-list-${i + 1}`} onClick={() => { setIdx(i); persist(i, progress); resetLocal(); setAtSite(true); setSelectedId(null); }}
+                      className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
+                      <MapPin size={16} /> Ya estoy en el sitio
                     </button>
                   </div>
                 )}
