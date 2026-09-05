@@ -110,3 +110,8 @@
 - CargaVehiculo.jsx rediseñado: SVG con gradientes (carrocería/cabina/cristal), sombra, faro con glow, luz trasera, ruedas con llanta+radios girando, carretera con profundidad, líneas de velocidad y humo. Zona de recogidas pulsante con cajas 3D y flecha.
 - CargaOrden.jsx rediseñado: interior claro con suelo de listones, cajas pseudo-3D (cara superior/lateral, nº, cinta) cargándose de la última a la primera, caja 1 naranja con glow + "A MANO" junto a puerta trasera, zona recogidas al frente con "recogidas" minúscula vertical.
 - PENDIENTE usuario: redeploy para emergent.host.
+
+## Orden de carga: apilado por columnas (2026-06-05)
+- CargaOrden.jsx: cajas apiladas en columnas de 3, de abajo hacia arriba (1,2,3 col1; 4,5,6 col2; 7... col3). count = nº paradas del driver_route (cap 12). Animación escalonada por índice. Cabina detallada (parabrisas/faro/espejo, verificada testing iteration_11). Badge/mensaje actualizados al apilado por columnas respetando recogidas.
+- Driver 1122 tiene driver_route con 7 paradas (para demo del apilado).
+- PENDIENTE usuario: redeploy para emergent.host.
