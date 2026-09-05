@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 7: full-stack test of the new admin 'Simulación de ruta' → assignable-to-route feature (POST /api/route-configs/{id}/simulation). Backend: created /app/backend/tests/test_simulation.py with 6 pytest tests (401 sin token, 403 con driver, 404 ruta inexistente, save + persistence sin tocar stops originales, list strips sim_stops+stops pero mantiene sim_summary, overwrite de sim previa) — 6/6 pass. Full regression /app/backend/tests/ ejecutada con -n 0 = 97/97 pass (91 previos + 6 nuevos). Curl adicional contra Ruta 8010 (36 paradas): antes/después de POST simulation los stops originales siguen intactos (len 36, primer nombre 'LOCKER LAVANDERIA RENTA RAPID' idéntico) y sim_stops/sim_summary/sim_updated_at se guardan. Frontend (viewport admin 1280x800): login admin OK, dashboard OK, 'Simulación de ruta' abre el gate sim-gate con título '¿Qué ruta vas a simular?', sim-gate-select poblado ('— Selecciona una ruta —' + 'Ruta 8010 · Carlos Ruiz · 36 paradas'), botones sim-gate-load y sim-gate-free visibles. Opción A: cargar Ruta 8010 → chip sim-change-route muestra 'Ruta 8010', KPI paradas=36, optimize-btn calcula (20.6 km / 2h 42m con 33 paradas sin tipo por defecto), assign-sim-btn se habilita, texto 'Asignar simulación a Ruta 8010', click → toast 'Simulación asignada a la ruta'. Chip sim-change-route vuelve al gate correctamente. Opción B (libre): sim-gate-free → chip 'Simulación libre', import /app/sample_new.xlsx, modal 'Paradas sin tipo' aparece (33 sin tipo, default 3 min) → Aplicar, optimize OK, assign-sim-btn → abre assign-sim-modal, select y assign-sim-confirm → toast 'Simulación asignada a la ruta'. Tras asignar, en 'Configuración de rutas' la tarjeta rc-card-{id} muestra 'Simulación: 20.6 km · 1h 3m' (rc-sim-{id}) y el detalle abre con rc-detail-sim visible (texto ' Simulación: 20.6 km · 1h 3m'). Contador '36 paradas' en la tarjeta y en el detalle NO cambió tras varias simulaciones (regla del usuario cumplida). Ver paradas: 36 filas rc-stop-*. admin-back sigue funcionando. Driver 1001/2002 puede loguearse y ver driver-dashboard normal (no afectado por simulaciones del admin).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/route-configs/{id}/simulation",
+        "issue": "Modelo SimulationBody.stops: List[Stop] fuerza lat/lon requeridos y valida cada parada. Bien. Sin embargo, summary es Optional[dict] sin ningún esquema — se acepta cualquier basura (p.ej. summary=null se guarda como null, o strings arbitrarios). Conviene tipar mínimamente {distance:float, duration:float, ...} o al menos validar que sea dict no-null."
+      },
+      {
+        "endpoint": "POST /api/route-configs/{id}/simulation",
+        "issue": "No hay endpoint para BORRAR una simulación asignada (solo se puede sobrescribir). Si el admin quiere quitar la 'Simulación' de una tarjeta sin re-simular, no puede."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Simulador (después de importar Excel en modo libre)",
+        "issues": [
+          "El modal 'Paradas sin tipo' se dispara automáticamente al importar y no tiene data-testid en su botón 'Aplicar' — solo se puede seleccionar por texto. Considerar añadir data-testid='paradas-sin-tipo-apply' para robustez de tests."
+        ]
+      },
+      {
+        "screen": "SimGate — opción a (sim-gate-select)",
+        "issues": [
+          "Cuando no hay rutas creadas, el select solo muestra el placeholder; conviene mostrar un estado vacío explícito con CTA para crear ruta desde ahí. Cosmético."
+        ]
+      },
+      {
+        "screen": "rc-detail (modal de detalle)",
+        "issues": [
+          "El bloque rc-detail-sim no muestra un botón para 'Quitar simulación'. Junto con la ausencia del endpoint DELETE, hoy es imposible limpiar una simulación asignada."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_simulation.py",
+    "/app/test_reports/pytest/pytest_iter7_sim.xml",
+    "/app/test_reports/pytest/pytest_iter7_all.xml"
+  ],
+  "action_items": [
+    "Opcional (menor): validar el shape de sim_summary (Pydantic model) en POST /api/route-configs/{id}/simulation.",
+    "Opcional (feature): añadir DELETE /api/route-configs/{id}/simulation + botón 'Quitar simulación' en rc-detail-sim para poder limpiar la estimación.",
+    "Opcional (DX de tests): añadir data-testid al botón 'Aplicar' del modal 'Paradas sin tipo'.",
+    "Opcional (UX): CTA de 'Crear ruta' dentro del gate cuando routeConfigs está vacío."
+  ],
+  "critical_code_review_comments": [
+    "server.py ya supera 1250 líneas — reforzar splitting recomendado en iteración 6.",
+    "list_route_configs correctamente hace pop('stops') y pop('sim_stops') y mantiene sim_summary — verificado por test.",
+    "save_simulation usa update_one con $set, no crea el doc si no existe (chequea con find_one antes) y devuelve el doc enriquecido — correcto.",
+    "Bien: la lógica del gate/simulador solo escribe en sim_* y jamás toca stops (verificado por test y por curl antes/después contra Ruta 8010, 36 paradas intactas).",
+    "assign-sim-btn.disabled = stops.length===0 || !summary || assigningSim — correcto; verificado que sin optimize el botón está deshabilitado."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_simulation.py"
+  ],
+  "success_rate": {
+    "backend": "100% (97/97 pytest, incl. 6 nuevos test_simulation)",
+    "frontend": "100% de flujos probados (gate, opción a directa, opción b con modal, chip volver al gate, tarjeta rc-sim + rc-detail-sim, integridad de 36 paradas, admin-back, regresión driver login)"
+  },
+  "seed_data_creation": "Driver 9902 'TEST_Sim Driver' creado por el fixture de test_simulation (rol driver, password 2002) para obtener token no-admin (403). Rutas SIM* temporales creadas y eliminadas por el propio test (cleanup en yield). Sobre Ruta 8010 existente se sobrescribió su sim_summary durante las pruebas (queda con la última simulación optimizada de 20.6 km · 1h 3m).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin 5708699/16288959, Driver 1001/2002, spare drivers 9901/9902 password 2002 (dejados en la BD, inofensivos).",
+  "context_for_next_testing_agent": "Feature de simulación totalmente funcional end-to-end. Nota Playwright: el flujo de 'simular libre' requiere manejar el modal 'Paradas sin tipo' clickeando 'Aplicar' (no tiene testid, usar get_by_role('button', name='Aplicar')). El DetailModal (rc-detail) hace fetch async: esperar a rc-number visible antes de comprobar rc-detail-sim (si no, el is_visible cae en el loader spinner y devuelve False). Ejecutar pytest con -n 0 para el módulo test_simulation y test_route_configs (siguen compartiendo drivers spare).",
+  "rca_of_the_issue": "N/A: no se encontró defecto funcional. Único gotcha durante testing: en el DetailModal, rc-detail se renderiza primero con el loader (route=null) y luego se llena; medir rc-detail-sim antes del fetch resulta en falso negativo. También el modal 'Paradas sin tipo' bloquea al usuario tras importar Excel — es funcionalidad pre-existente pero conviene testid para automatización."
+}

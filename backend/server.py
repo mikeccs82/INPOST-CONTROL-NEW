@@ -958,6 +958,11 @@ class RouteConfigBody(BaseModel):
     departure_time: str = ""
 
 
+class SimulationBody(BaseModel):
+    stops: List[Stop]
+    summary: Optional[dict] = None
+
+
 def create_token(u):
     payload = {"sub": u["id"], "role": u.get("role", "driver"), "exp": datetime.now(timezone.utc) + timedelta(days=30)}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
@@ -1123,6 +1128,7 @@ async def list_route_configs(admin=Depends(require_admin)):
     for d in docs:
         d = await _enrich_config(d)
         d.pop("stops", None)
+        d.pop("sim_stops", None)
         out.append(d)
     return out
 
@@ -1197,6 +1203,21 @@ async def update_config_stops(cid: str, file: UploadFile = File(...), admin=Depe
     stops = [s for s in stops if s["lat"] is not None and s["lon"] is not None]
     now = datetime.now(timezone.utc).isoformat()
     await db.route_configs.update_one({"id": cid}, {"$set": {"stops": stops, "updated_at": now}})
+    doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
+    return await _enrich_config(doc)
+
+
+@api_router.post("/route-configs/{cid}/simulation")
+async def save_simulation(cid: str, body: SimulationBody, admin=Depends(require_admin)):
+    if not await db.route_configs.find_one({"id": cid}):
+        raise HTTPException(404, "Ruta no encontrada")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.route_configs.update_one({"id": cid}, {"$set": {
+        "sim_stops": [s.model_dump() for s in body.stops],
+        "sim_summary": body.summary,
+        "sim_updated_at": now,
+        "updated_at": now,
+    }})
     doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
     return await _enrich_config(doc)
 

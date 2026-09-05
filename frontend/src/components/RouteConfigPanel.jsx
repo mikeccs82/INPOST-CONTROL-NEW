@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Route, User, MapPin, Clock, Anchor, CalendarClock, X, Loader2, Trash2, Upload, Eye, Save } from "lucide-react";
+import { Plus, Route, User, MapPin, Clock, Anchor, CalendarClock, X, Loader2, Trash2, Upload, Eye, Save, FlaskConical } from "lucide-react";
 import {
   listRouteConfigs, createRouteConfig, updateRouteConfig, deleteRouteConfig,
   updateConfigStops, getRouteConfig, listUsers,
 } from "../lib/api";
+import { fmtDistance, fmtDuration } from "../lib/format";
 
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -136,6 +137,13 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
             <span className="text-[11px] text-slate-500">Actualizado {fmtDate(route.updated_at)}</span>
           </div>
 
+          {route.sim_summary && (
+            <div className="flex items-center justify-between rounded-md bg-[#F26A21]/10 border border-[#F26A21]/30 px-3 py-2" data-testid="rc-detail-sim">
+              <span className="text-sm text-[#F26A21] font-semibold flex items-center gap-2"><FlaskConical size={15} /> Simulación: {fmtDistance(route.sim_summary.distance)} · {fmtDuration(route.sim_summary.duration)}</span>
+              <span className="text-[11px] text-slate-400">{fmtDate(route.sim_updated_at)}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <button data-testid="rc-view-stops" onClick={() => setViewStops(true)}
               className="flex items-center justify-center gap-2 text-sm font-semibold text-white bg-[#1E5AA8] hover:bg-[#184a8c] py-2.5 rounded-md transition-colors">
@@ -225,6 +233,11 @@ const Card = ({ r, onClick }) => (
       <div className="flex items-center gap-1.5 text-slate-300"><Anchor size={13} className="text-slate-500" /> Muelle {r.dock ?? "—"}</div>
       <div className="flex items-center gap-1.5 text-slate-300"><CalendarClock size={13} className="text-slate-500" /> {fmtDate(r.updated_at)}</div>
     </div>
+    {r.sim_summary && (
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#F26A21] font-semibold" data-testid={`rc-sim-${r.id}`}>
+        <FlaskConical size={12} /> Simulación: {fmtDistance(r.sim_summary.distance)} · {fmtDuration(r.sim_summary.duration)}
+      </div>
+    )}
   </button>
 );
 

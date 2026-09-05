@@ -96,6 +96,7 @@ export const updateConfigStops = async (id, file) => {
   form.append("file", file);
   return (await client.post(`/route-configs/${id}/stops`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
 };
+export const saveSimulation = async (id, payload) => (await client.post(`/route-configs/${id}/simulation`, payload)).data;
 
 export const saveRoute = async (payload) => {
   const { data } = await client.post("/routes", payload);

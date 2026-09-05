@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import {
   Upload, Save, Download, FolderOpen, Route as RouteIcon, Zap,
   Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw, LogOut, Send, ArrowLeft,
+  FlaskConical, ChevronRight, X, CheckCircle2,
 } from "lucide-react";
 import { MapView } from "./components/MapView";
 import { StopList } from "./components/StopList";
@@ -15,10 +16,9 @@ import { GeocodeResolveDialog } from "./components/GeocodeResolveDialog";
 import { SavedRoutesDialog } from "./components/SavedRoutesDialog";
 import { UsersDialog } from "./components/UsersDialog";
 import { ExportNameModal } from "./components/ExportNameModal";
-import { AssignModal } from "./components/AssignModal";
 import {
   importExcel, optimizeRoute, computeRoute, saveRoute, exportRoute,
-  getSettings, saveSettings,
+  getSettings, saveSettings, listRouteConfigs, getRouteConfig, saveSimulation,
 } from "./lib/api";
 import { fmtDistance, fmtDuration } from "./lib/format";
 import "./App.css";
@@ -39,13 +39,23 @@ function App({ user, onLogout, onBack }) {
   const [savedOpen, setSavedOpen] = useState(false);
   const [driversOpen, setDriversOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
   const [routeName, setRouteName] = useState("");
   const [warehouse, setWarehouse] = useState({ start: null, end: null, sameAsStart: true, serviceByType: { P: 0, PD: 0, L: 0 }, untypedMin: 0, departureTime: "", respectWindows: true });
   const [pendingImport, setPendingImport] = useState([]);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [untypedModal, setUntypedModal] = useState({ open: false, count: 0 });
+  const [simMode, setSimMode] = useState(null); // null=gate, 'route', 'free'
+  const [targetRoute, setTargetRoute] = useState(null); // {id, number}
+  const [routeConfigs, setRouteConfigs] = useState([]);
+  const [gateLoading, setGateLoading] = useState(false);
+  const [assignSimOpen, setAssignSimOpen] = useState(false);
+  const [assigningSim, setAssigningSim] = useState(false);
   const fileRef = useRef(null);
+
+  const loadRouteConfigs = useCallback(() => {
+    listRouteConfigs().then(setRouteConfigs).catch(() => {});
+  }, []);
+  useEffect(() => { loadRouteConfigs(); }, [loadRouteConfigs]);
 
   useEffect(() => {
     getSettings()
@@ -306,6 +316,71 @@ function App({ user, onLogout, onBack }) {
     setTimeout(() => recalc(parsed), 150);
   };
 
+  const chooseRouteToSim = async (id) => {
+    if (!id) return;
+    setGateLoading(true);
+    try {
+      const r = await getRouteConfig(id);
+      const loaded = applyService((r.stops || []).map((s) => ({ ...s, id: s.id || genId() })));
+      setStops(loaded);
+      setTargetRoute({ id: r.id, number: r.number });
+      setSimMode("route");
+      clearRoute();
+      if (loaded.length === 0) toast.info("Esta ruta no tiene paradas. Importa un Excel para simular.");
+    } catch (e) {
+      toast.error("No se pudo cargar la ruta");
+    } finally {
+      setGateLoading(false);
+    }
+  };
+
+  const startFreeSim = () => {
+    setStops([]);
+    clearRoute();
+    setTargetRoute(null);
+    setSimMode("free");
+  };
+
+  const backToGate = () => {
+    handleReset();
+    setSimMode(null);
+    setTargetRoute(null);
+    loadRouteConfigs();
+  };
+
+  const assignSimTo = async (routeId) => {
+    if (!routeId || stops.length === 0) return;
+    setAssigningSim(true);
+    try {
+      await saveSimulation(routeId, { stops, summary });
+      toast.success("Simulación asignada a la ruta");
+      setAssignSimOpen(false);
+      loadRouteConfigs();
+    } catch (e) {
+      toast.error("No se pudo asignar la simulación");
+    } finally {
+      setAssigningSim(false);
+    }
+  };
+
+  const handleAssignSim = () => {
+    if (targetRoute) assignSimTo(targetRoute.id);
+    else setAssignSimOpen(true);
+  };
+
+  if (simMode === null) {
+    return (
+      <SimGate
+        routes={routeConfigs}
+        loading={gateLoading}
+        onChoose={chooseRouteToSim}
+        onFree={startFreeSim}
+        onBack={onBack}
+        adminName={user?.nombres || user?.username}
+      />
+    );
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Toaster theme="dark" position="top-right" richColors />
@@ -320,8 +395,13 @@ function App({ user, onLogout, onBack }) {
           )}
           <img src={LOGO} alt="BoxLogic" className="h-11 w-auto" data-testid="brand-logo" />
           <div className="hidden sm:block border-l border-slate-200 pl-3">
-            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Optimizador de rutas</p>
+            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Simulación de ruta</p>
           </div>
+          <button data-testid="sim-change-route" onClick={backToGate}
+            className="flex items-center gap-1.5 text-xs font-bold text-[#F26A21] bg-[#F26A21]/10 hover:bg-[#F26A21]/20 border border-[#F26A21]/30 px-3 py-1.5 rounded-md transition-colors">
+            <FlaskConical size={13} /> {targetRoute ? `Ruta ${targetRoute.number}` : "Simulación libre"}
+            <ChevronRight size={13} className="opacity-60" />
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" data-testid="file-input" />
@@ -423,9 +503,10 @@ function App({ user, onLogout, onBack }) {
               {optimizing ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
               {optimizing ? "Optimizando..." : "Optimizar ruta"}
             </motion.button>
-            <button data-testid="assign-btn" onClick={() => setAssignOpen(true)} disabled={stops.length === 0}
+            <button data-testid="assign-sim-btn" onClick={handleAssignSim} disabled={stops.length === 0 || !summary || assigningSim}
               className="w-full flex items-center justify-center gap-2 bg-[#1E5AA8] hover:bg-[#184a8c] text-white font-bold text-sm py-2.5 rounded-sm transition-colors disabled:opacity-40">
-              <Send size={16} /> Asignar a conductor
+              {assigningSim ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {targetRoute ? `Asignar simulación a Ruta ${targetRoute.number}` : "Asignar simulación a la ruta"}
             </button>
           </div>
         </aside>
@@ -462,12 +543,14 @@ function App({ user, onLogout, onBack }) {
         onConfirm={doExport}
         onCancel={() => setExportOpen(false)}
       />
-      <AssignModal
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
-        stops={stops}
-        routeName={routeName}
-        meta={{ metric, start: warehouse.start, end: warehouse.sameAsStart ? null : warehouse.end, round_trip: warehouse.sameAsStart, departure_time: warehouse.departureTime || null }}
+      <AssignSimModal
+        open={assignSimOpen}
+        routes={routeConfigs}
+        stopsCount={stops.length}
+        summary={summary}
+        assigning={assigningSim}
+        onAssign={assignSimTo}
+        onClose={() => setAssignSimOpen(false)}
       />
       <UntypedMinutesModal
         open={untypedModal.open}
@@ -492,5 +575,85 @@ const Kpi = ({ icon, label, value }) => (
     <div className="text-white font-mono-tech font-semibold text-base mt-0.5 truncate" data-testid={`kpi-${label.toLowerCase()}`}>{value}</div>
   </div>
 );
+
+const SimGate = ({ routes, loading, onChoose, onFree, onBack, adminName }) => {
+  const [sel, setSel] = useState("");
+  return (
+    <div data-testid="sim-gate" className="h-screen w-screen flex flex-col bg-slate-950">
+      <header className="h-14 shrink-0 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <button data-testid="sim-gate-back" onClick={onBack} className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-md flex items-center justify-center text-slate-200"><ArrowLeft size={17} /></button>
+          <div className="min-w-0">
+            <div className="text-white font-bold text-sm">Simulación de ruta</div>
+            <div className="text-[10px] text-slate-400 truncate">{adminName}</div>
+          </div>
+        </div>
+      </header>
+      <div className="flex-1 overflow-y-auto thin-scroll p-4 flex items-start justify-center">
+        <div className="w-full max-w-md mt-6">
+          <div className="w-14 h-14 rounded-2xl bg-[#F26A21]/15 border border-[#F26A21]/40 flex items-center justify-center mb-4">
+            <FlaskConical size={28} className="text-[#F26A21]" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-1">¿Qué ruta vas a simular?</h1>
+          <p className="text-sm text-slate-400 mb-6">Elige una ruta existente para cargar sus paradas, o simula libremente importando un Excel.</p>
+
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 block">Ruta existente</label>
+            <select data-testid="sim-gate-select" value={sel} onChange={(e) => setSel(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 text-white rounded-md px-3 py-2.5 outline-none focus:ring-1 focus:ring-[#F26A21] mb-3">
+              <option value="">— Selecciona una ruta —</option>
+              {routes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  Ruta {r.number || "—"}{r.driver ? ` · ${r.driver.nombres} ${r.driver.apellidos}`.trimEnd() : ""} · {r.stops_count || 0} paradas
+                </option>
+              ))}
+            </select>
+            <button data-testid="sim-gate-load" onClick={() => onChoose(sel)} disabled={!sel || loading}
+              className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white font-bold py-3 rounded-md transition-colors disabled:opacity-40">
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} Cargar paradas y simular
+            </button>
+            {routes.length === 0 && <p className="text-[11px] text-slate-500 mt-2">No hay rutas creadas todavía. Créalas en "Configuración de rutas".</p>}
+          </div>
+
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-slate-700" /><span className="text-xs text-slate-500 font-semibold">o</span><div className="flex-1 h-px bg-slate-700" />
+          </div>
+
+          <button data-testid="sim-gate-free" onClick={onFree}
+            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-3 rounded-md transition-colors">
+            <Upload size={16} /> Simular libre (importar Excel)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AssignSimModal = ({ open, routes, stopsCount, summary, assigning, onAssign, onClose }) => {
+  const [sel, setSel] = useState("");
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div data-testid="assign-sim-modal" onClick={(e) => e.stopPropagation()} className="bg-slate-800 border border-slate-700 rounded-lg w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <h3 className="font-bold text-white flex items-center gap-2"><CheckCircle2 size={18} className="text-[#F26A21]" /> Asignar simulación</h3>
+          <button data-testid="assign-sim-close" onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-slate-400">Se guardará esta simulación ({stopsCount} paradas{summary ? `, ${fmtDistance(summary.distance)} · ${fmtDuration(summary.duration)}` : ""}) como estimación en la ruta que elijas. No cambia el orden que gestiona el conductor.</p>
+          <select data-testid="assign-sim-select" value={sel} onChange={(e) => setSel(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 text-white rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]">
+            <option value="">— Selecciona la ruta destino —</option>
+            {routes.map((r) => <option key={r.id} value={r.id}>Ruta {r.number || "—"}{r.driver ? ` · ${r.driver.nombres} ${r.driver.apellidos}`.trimEnd() : ""}</option>)}
+          </select>
+          <button data-testid="assign-sim-confirm" onClick={() => onAssign(sel)} disabled={!sel || assigning}
+            className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white font-bold py-2.5 rounded-md transition-colors disabled:opacity-40">
+            {assigning ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Asignar a esta ruta
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default App;
