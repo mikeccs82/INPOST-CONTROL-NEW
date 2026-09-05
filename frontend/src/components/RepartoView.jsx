@@ -102,6 +102,8 @@ export const RepartoView = () => {
   const endNo = () => { advance({ done: true }); };
   const endGuardar = () => { advance({ done: true, incidencia: { tipo: "general", detalle: endDetail || "" } }); };
 
+  const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.delivered || p.pickedUp || p.incidencia?.tipo === "definitivo"); };
+
   const badgeOf = (p) => {
     if (!p) return null;
     if (p.incidencia?.tipo === "definitivo") return { t: "Cerrado", c: "text-red-400" };
@@ -233,31 +235,33 @@ export const RepartoView = () => {
           </div>
         )}
 
-        {/* Lista completa con estado, selección + Ir */}
+        {/* Lista completa con estado, selección + Ir (hechas al final) */}
         <h2 className="text-sm font-bold text-slate-300 mb-2">Todas las paradas</h2>
         <div className="space-y-2">
-          {stops.map((s, i) => {
-            const done = i < idx;
-            const isCur = i === idx && !finished;
+          {stops.map((s, i) => ({ s, i }))
+            .sort((a, b) => (isDone(a.s) ? 1 : 0) - (isDone(b.s) ? 1 : 0))
+            .map(({ s, i }) => {
+            const done = isDone(s);
+            const isCur = i === idx && !allVisited;
             const badge = badgeOf(progress[s.id]);
             const sel = selectedId === s.id;
             const w = fmtWindow(s);
             return (
-              <div key={s.id} className={`rounded-xl border transition-colors ${sel ? "border-[#F26A21]" : isCur ? "border-[#F26A21]/40" : "border-slate-700"} ${isCur ? "bg-[#F26A21]/10" : "bg-slate-900"}`}>
-                <button data-testid={`reparto-stop-${i + 1}`} onClick={() => setSelectedId(sel ? null : s.id)}
-                  className="w-full text-left p-3 flex items-center gap-3">
+              <div key={s.id} className={`rounded-xl border transition-colors ${sel && !done ? "border-[#F26A21]" : isCur ? "border-[#F26A21]/40" : "border-slate-700"} ${isCur ? "bg-[#F26A21]/10" : done ? "bg-slate-900/50" : "bg-slate-900"}`}>
+                <button data-testid={`reparto-stop-${i + 1}`} onClick={() => { if (!done) setSelectedId(sel ? null : s.id); }}
+                  className={`w-full text-left p-3 flex items-center gap-3 ${done ? "cursor-default" : ""}`}>
                   <div className={`shrink-0 w-9 h-9 rounded-full font-bold flex items-center justify-center ${done ? "bg-emerald-600 text-white" : isCur ? "bg-[#F26A21] text-white" : "bg-slate-800 border border-slate-600 text-white"}`}>
                     {done ? <CheckCircle2 size={18} /> : i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold truncate text-white">{s.name || `Parada ${i + 1}`}</div>
+                    <div className={`text-sm font-semibold truncate ${done ? "text-slate-400" : "text-white"}`}>{s.name || `Parada ${i + 1}`}</div>
                     {w && <div className="text-[11px] text-[#F26A21] font-semibold flex items-center gap-1"><Clock size={11} className="shrink-0" /> {w}</div>}
                     <div className="text-xs text-slate-500 truncate">{s.address || "—"}</div>
                   </div>
                   {badge && <span className={`text-[10px] font-bold uppercase shrink-0 ${badge.c}`}>{badge.t}</span>}
                   {isCur && !badge && <span className="text-[10px] font-bold uppercase text-[#F26A21] shrink-0">Actual</span>}
                 </button>
-                {sel && (
+                {sel && !done && (
                   <div className="px-3 pb-3 space-y-2">
                     <button data-testid={`reparto-ir-list-${i + 1}`} onClick={() => irA(s)}
                       className="w-full flex items-center justify-center gap-2 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold py-2.5 rounded-lg transition-colors active:scale-95">
