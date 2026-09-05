@@ -64,17 +64,15 @@ export const RepartoView = () => {
     </div>
   );
 
-  const allVisited = idx >= stops.length;
-  const pendingVuelvo = stops.filter((s) => {
-    const p = progress[s.id] || {};
-    return p.incidencia?.tipo === "vuelvo" && !p.done && !p.delivered && !p.pickedUp;
-  });
-  const finished = allVisited && pendingVuelvo.length === 0;
-  const cur = allVisited ? null : stops[idx];
+  const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.delivered || p.pickedUp || p.incidencia?.tipo === "definitivo"); };
+  const pending = stops.filter((s) => !isDone(s));
+  const finished = stops.length > 0 && pending.length === 0;
+  const cur = (idx < stops.length && !isDone(stops[idx])) ? stops[idx] : null;
   const curMeta = cur ? (meta[cur.id] || {}) : {};
   const curP = cur ? (progress[cur.id] || {}) : {};
   const onsite = atSite || !!(curP.delivered || curP.pickedUp || curP.incidencia);
   const serviced = !!(curP.delivered || curP.pickedUp);
+  const doneCount = stops.length - pending.length;
 
   const setStopProgress = (patch, opts = {}) => {
     const np = { ...progress, [cur.id]: { ...(progress[cur.id] || {}), ...patch } };
@@ -102,8 +100,6 @@ export const RepartoView = () => {
   const endNo = () => { advance({ done: true }); };
   const endGuardar = () => { advance({ done: true, incidencia: { tipo: "general", detalle: endDetail || "" } }); };
 
-  const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.delivered || p.pickedUp || p.incidencia?.tipo === "definitivo"); };
-
   const badgeOf = (p) => {
     if (!p) return null;
     if (p.incidencia?.tipo === "definitivo") return { t: "Cerrado", c: "text-red-400" };
@@ -117,7 +113,7 @@ export const RepartoView = () => {
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-bold text-white">Ruta a Reparto</h1>
-          <span className="text-sm font-mono-tech text-slate-300">{Math.min(idx + (finished ? 0 : 1), stops.length)} / {stops.length}</span>
+          <span className="text-sm font-mono-tech text-slate-300">{doneCount} / {stops.length}</span>
         </div>
         <p className="text-xs text-slate-400 mb-4">{routeNumber ? `Ruta ${routeNumber}` : ""}</p>
 
@@ -133,11 +129,11 @@ export const RepartoView = () => {
               </button>
             )}
           </div>
-        ) : allVisited && pendingVuelvo.length > 0 ? (
+        ) : !cur ? (
           <div data-testid="reparto-pending" className="rounded-2xl bg-amber-500/10 border border-amber-500/40 p-5 mb-4 text-center">
             <Clock size={30} className="text-amber-400 mx-auto mb-2" />
-            <p className="text-white font-bold">Tienes {pendingVuelvo.length} parada{pendingVuelvo.length > 1 ? "s" : ""} pendiente{pendingVuelvo.length > 1 ? "s" : ""}</p>
-            <p className="text-slate-300 text-sm mt-1">Marcada{pendingVuelvo.length > 1 ? "s" : ""} como "vuelvo más tarde". Selecciónala{pendingVuelvo.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla{pendingVuelvo.length > 1 ? "s" : ""}.</p>
+            <p className="text-white font-bold">Tienes {pending.length} parada{pending.length > 1 ? "s" : ""} pendiente{pending.length > 1 ? "s" : ""}</p>
+            <p className="text-slate-300 text-sm mt-1">Selecciónala{pending.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla{pending.length > 1 ? "s" : ""}.</p>
           </div>
         ) : (
           <div data-testid="reparto-current" className="rounded-2xl bg-slate-900 border border-[#F26A21]/40 p-4 mb-4">
@@ -185,7 +181,7 @@ export const RepartoView = () => {
                 )}
                 <button data-testid="reparto-next-stop" onClick={onNextStop}
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-3 rounded-xl transition-colors">
-                  {idx + 1 >= stops.length ? "Finalizar ruta" : "Siguiente parada"} <ArrowRight size={18} />
+                  {stops.some((s, i) => i !== idx && !isDone(s)) ? "Siguiente parada" : "Finalizar ruta"} <ArrowRight size={18} />
                 </button>
               </div>
             )}
@@ -242,7 +238,7 @@ export const RepartoView = () => {
             .sort((a, b) => (isDone(a.s) ? 1 : 0) - (isDone(b.s) ? 1 : 0))
             .map(({ s, i }) => {
             const done = isDone(s);
-            const isCur = i === idx && !allVisited;
+            const isCur = cur && cur.id === s.id;
             const badge = badgeOf(progress[s.id]);
             const sel = selectedId === s.id;
             const w = fmtWindow(s);
