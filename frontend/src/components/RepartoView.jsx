@@ -20,6 +20,7 @@ export const RepartoView = () => {
   const [stops, setStops] = useState([]);
   const [meta, setMeta] = useState({});
   const [routeNumber, setRouteNumber] = useState(null);
+  const [nave, setNave] = useState(null);
 
   const [idx, setIdx] = useState(0);
   const [progress, setProgress] = useState({}); // stop_id -> {delivered, deliveredSacas, deliveredBultos, pickedUp, pickupSacas, incidencia:{tipo,detalle}, done}
@@ -39,6 +40,7 @@ export const RepartoView = () => {
       .then(([rc, sc, rp]) => {
         setRouteNumber(rc.route_number);
         setStops(rc.driver_route?.stops || []);
+        setNave(rc.driver_route?.start || null);
         const m = {};
         (sc.session?.positions || []).forEach((p) => { if (p.stop_id) m[p.stop_id] = p; });
         setMeta(m);
@@ -62,8 +64,13 @@ export const RepartoView = () => {
     </div>
   );
 
-  const finished = idx >= stops.length;
-  const cur = finished ? null : stops[idx];
+  const allVisited = idx >= stops.length;
+  const pendingVuelvo = stops.filter((s) => {
+    const p = progress[s.id] || {};
+    return p.incidencia?.tipo === "vuelvo" && !p.done && !p.delivered && !p.pickedUp;
+  });
+  const finished = allVisited && pendingVuelvo.length === 0;
+  const cur = allVisited ? null : stops[idx];
   const curMeta = cur ? (meta[cur.id] || {}) : {};
   const curP = cur ? (progress[cur.id] || {}) : {};
   const onsite = atSite || !!(curP.delivered || curP.pickedUp || curP.incidencia);
@@ -98,8 +105,8 @@ export const RepartoView = () => {
   const badgeOf = (p) => {
     if (!p) return null;
     if (p.incidencia?.tipo === "definitivo") return { t: "Cerrado", c: "text-red-400" };
+    if (p.done || p.delivered || p.pickedUp) return { t: "Hecha", c: "text-emerald-400" };
     if (p.incidencia?.tipo === "vuelvo") return { t: "Vuelvo", c: "text-amber-400" };
-    if (p.done) return { t: "Hecha", c: "text-emerald-400" };
     return null;
   };
 
@@ -116,7 +123,19 @@ export const RepartoView = () => {
           <div className="rounded-2xl bg-emerald-600/10 border border-emerald-500/30 p-6 text-center mb-4">
             <Flag size={34} className="text-emerald-400 mx-auto mb-2" />
             <p className="text-white font-bold text-lg">¡Ruta completada!</p>
-            <p className="text-slate-400 text-sm mt-1">Has visitado todas las paradas.</p>
+            <p className="text-slate-400 text-sm mt-1 mb-4">Has visitado todas las paradas.</p>
+            {nave && (
+              <button data-testid="reparto-ir-nave" onClick={() => irA(nave)}
+                className="w-full flex items-center justify-center gap-2.5 bg-[#F26A21] hover:bg-[#f58220] text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98] shadow-lg shadow-orange-900/30">
+                <Navigation size={24} /> Ir a la nave
+              </button>
+            )}
+          </div>
+        ) : allVisited && pendingVuelvo.length > 0 ? (
+          <div data-testid="reparto-pending" className="rounded-2xl bg-amber-500/10 border border-amber-500/40 p-5 mb-4 text-center">
+            <Clock size={30} className="text-amber-400 mx-auto mb-2" />
+            <p className="text-white font-bold">Tienes {pendingVuelvo.length} parada{pendingVuelvo.length > 1 ? "s" : ""} pendiente{pendingVuelvo.length > 1 ? "s" : ""}</p>
+            <p className="text-slate-300 text-sm mt-1">Marcada{pendingVuelvo.length > 1 ? "s" : ""} como "vuelvo más tarde". Selecciónala{pendingVuelvo.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla{pendingVuelvo.length > 1 ? "s" : ""}.</p>
           </div>
         ) : (
           <div data-testid="reparto-current" className="rounded-2xl bg-slate-900 border border-[#F26A21]/40 p-4 mb-4">
