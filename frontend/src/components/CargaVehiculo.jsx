@@ -1,6 +1,6 @@
-import { Info } from "lucide-react";
+import { Info, ArrowRight } from "lucide-react";
 
-export const CargaVehiculo = () => {
+export const CargaVehiculo = ({ onNext }) => {
   return (
     <div data-testid="carga-view" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
       <style>{`
@@ -91,6 +91,11 @@ export const CargaVehiculo = () => {
             Recuerda dejar un <span className="font-bold text-white">espacio en la parte delantera lateral</span> para dejar las <span className="font-bold text-green-400">recogidas</span>.
           </p>
         </div>
+
+        <button data-testid="carga-next-step" onClick={onNext}
+          className="mt-4 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base py-3.5 rounded-xl transition-colors active:scale-[0.99]">
+          Siguiente <ArrowRight size={18} />
+        </button>
       </div>
     </div>
   );

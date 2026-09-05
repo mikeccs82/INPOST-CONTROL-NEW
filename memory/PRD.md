@@ -100,3 +100,8 @@
 ## Animación Carga del vehículo (2026-06-05)
 - Nuevo CargaVehiculo.jsx (screen 'carga'): furgoneta SVG animada (drive-in, ruedas girando, rebote, carretera en movimiento) con zona verde parpadeante + flecha en la parte delantera lateral etiquetada "Zona de recogidas". Mensaje: dejar espacio en la parte delantera lateral para las recogidas. Animaciones CSS keyframes inline.
 - PENDIENTE usuario: redeploy para emergent.host.
+
+## Orden de carga (2026-06-05)
+- CargaVehiculo: botón "Siguiente" (carga-next-step) -> screen 'carga-orden'.
+- Nuevo CargaOrden.jsx (screen 'carga-orden'): animación de cajas que se cargan de la ÚLTIMA parada (n) a la PRIMERA (1), con la parada 1 "A MANO" junto a la puerta trasera y la zona de recogidas reservada al frente. count = nº paradas del driver_route (cap 6). Mensaje explicativo.
+- PENDIENTE usuario: redeploy para emergent.host.
