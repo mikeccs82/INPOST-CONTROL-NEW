@@ -130,7 +130,12 @@
 - Persistencia: la ruta final (solo cargadas) se guarda vía PUT /my/driver-route/order.
 - Verificado por captura (ingresar/devolver/modal/confirm->reparto).
 
-## Persistencia de la carga del furgón — diario de rutas (2026-06-09)
+## Ruta a Reparto (Paso 4) (2026-06-09)
+- Activado el Paso 4 (antes placeholder "Próximamente"). Nuevo `RepartoView.jsx` (screen 'reparto').
+- Muestra la ruta final del conductor (driver_route.stops, solo las cargadas) en orden de reparto: tarjeta "Próxima parada" destacada + lista completa numerada.
+- Cada parada tiene botón "Ir" que abre Google Maps con navegación (`maps/dir/?api=1&destination=lat,lon&travelmode=driving`; fallback a dirección si no hay coords). En móvil abre la app de Google Maps.
+- DriverDashboard: card 'reparto' soon:false -> onOpenReparto -> screen 'reparto'. Solo frontend (GET /my/route-config).
+- Verificado por captura (4 paradas, botones Ir renderizados).
 - BUG usuario: "no se está memorizando la carga del vehículo". El set `loaded` de CargaLista vivía solo en estado local; al recargar/volver se perdía el progreso.
 - FIX: nueva colección independiente `carga_sessions` (diario por conductor+fecha) para registrar qué paradas ya se ingresaron al furgón.
   - Backend: GET /api/my/carga (devuelve {date, loaded_stop_ids} del día) y PUT /api/my/carga (upsert por driver_id+date con loaded_stop_ids, route_config_id, route_number, updated_at). Modelo CargaBody.

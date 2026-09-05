@@ -4,13 +4,13 @@ const CARDS = [
   { key: "sacas", label: "Ordenar Sacas", step: "Paso 1", icon: Package, accent: "#2563EB", soon: false },
   { key: "route", label: "Ordenar ruta", step: "Paso 2", icon: Route, accent: "#F26A21", soon: false },
   { key: "carga", label: "Carga del vehículo", step: "Paso 3", icon: Truck, accent: "#2563EB", soon: false },
-  { key: "reparto", label: "Ruta a Reparto", step: "Paso 4", icon: Navigation, accent: "#F26A21", soon: true },
+  { key: "reparto", label: "Ruta a Reparto", step: "Paso 4", icon: Navigation, accent: "#F26A21", soon: false },
   { key: "datos", label: "Datos de la ruta", icon: ClipboardList, accent: "#2563EB", soon: true },
   { key: "paradas", label: "Paradas de la ruta", icon: MapPin, accent: "#F26A21", soon: false },
 ];
 
-export const DriverDashboard = ({ onOpenRoute, onOpenParadas, onOpenSacas, onOpenCarga, onSoon, onLogout }) => {
-  const action = { route: onOpenRoute, paradas: onOpenParadas, sacas: onOpenSacas, carga: onOpenCarga };
+export const DriverDashboard = ({ onOpenRoute, onOpenParadas, onOpenSacas, onOpenCarga, onOpenReparto, onSoon, onLogout }) => {
+  const action = { route: onOpenRoute, paradas: onOpenParadas, sacas: onOpenSacas, carga: onOpenCarga, reparto: onOpenReparto };
   const handle = (c) => (c.soon ? onSoon(c.label) : action[c.key]());
 
   return (
