@@ -954,6 +954,10 @@ class CommentBody(BaseModel):
     comment: str = ""
 
 
+class CargaBody(BaseModel):
+    loaded_stop_ids: List[str] = []
+
+
 class RouteConfigBody(BaseModel):
     number: str = ""
     driver_id: Optional[str] = None
@@ -1209,6 +1213,32 @@ async def build_my_route(user=Depends(get_current_user)):
     }
     await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": driver_route}})
     return {"route_number": rc.get("number"), "driver_route": driver_route}
+
+
+@api_router.get("/my/carga")
+async def my_carga(user=Depends(get_current_user)):
+    d = _today()
+    doc = await db.carga_sessions.find_one({"driver_id": user["id"], "date": d}, {"_id": 0})
+    return {"date": d, "loaded_stop_ids": (doc or {}).get("loaded_stop_ids", [])}
+
+
+@api_router.put("/my/carga")
+async def save_my_carga(body: CargaBody, user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0, "id": 1, "number": 1})
+    d = _today()
+    await db.carga_sessions.update_one(
+        {"driver_id": user["id"], "date": d},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": d,
+            "route_config_id": rc.get("id") if rc else None,
+            "route_number": rc.get("number") if rc else None,
+            "loaded_stop_ids": body.loaded_stop_ids,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
 
 
 @api_router.put("/my/driver-route/order")

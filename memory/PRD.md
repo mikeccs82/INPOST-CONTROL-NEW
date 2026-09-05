@@ -129,3 +129,11 @@
 - DriverApp: CargaOrden onNext->'carga-lista'; CargaLista onFinish->load()+setScreen('reparto'). Nueva screen 'reparto' (Paso 4, Próximamente).
 - Persistencia: la ruta final (solo cargadas) se guarda vía PUT /my/driver-route/order.
 - Verificado por captura (ingresar/devolver/modal/confirm->reparto).
+
+## Persistencia de la carga del furgón — diario de rutas (2026-06-09)
+- BUG usuario: "no se está memorizando la carga del vehículo". El set `loaded` de CargaLista vivía solo en estado local; al recargar/volver se perdía el progreso.
+- FIX: nueva colección independiente `carga_sessions` (diario por conductor+fecha) para registrar qué paradas ya se ingresaron al furgón.
+  - Backend: GET /api/my/carga (devuelve {date, loaded_stop_ids} del día) y PUT /api/my/carga (upsert por driver_id+date con loaded_stop_ids, route_config_id, route_number, updated_at). Modelo CargaBody.
+  - Frontend api.js: myCarga(), saveMyCarga(ids). CargaLista carga myCarga en el mount y restaura el set (filtrando ids que sigan en la ruta). ingresar()/devolver() persisten el set al backend en cada cambio.
+  - Al generar nueva ruta NO se borra la carga (se mantiene lo marcado, decisión del usuario).
+- Verificado: curl (PUT/GET persiste) + captura móvil (progreso restaurado 1/4 con la parada ya ingresada tras reentrar en Paso 3).

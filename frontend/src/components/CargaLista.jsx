@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Hash, ShoppingBag, Package, CheckCircle2, Truck, Undo2, ArrowRight, AlertTriangle, X } from "lucide-react";
-import { myRouteConfig, mySacas, saveDriverRouteOrder } from "../lib/api";
+import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga } from "../lib/api";
 
 export const CargaLista = ({ onFinish }) => {
   const [loading, setLoading] = useState(true);
@@ -12,8 +12,8 @@ export const CargaLista = ({ onFinish }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([myRouteConfig(), mySacas()])
-      .then(([rc, sc]) => {
+    Promise.all([myRouteConfig(), mySacas(), myCarga()])
+      .then(([rc, sc, cg]) => {
         const posByStop = {};
         (sc.session?.positions || []).forEach((p) => { if (p.stop_id) posByStop[p.stop_id] = p; });
         const rs = rc.driver_route?.stops || [];
@@ -23,10 +23,15 @@ export const CargaLista = ({ onFinish }) => {
           return { id: s.id, parada: i + 1, posicion: p.position ?? null, codigo: s.order_id || "—", sacas: p.sacas ?? 0, bultos: p.bultos ?? 0 };
         }).reverse();
         setItems(list);
+        // Restaurar progreso de carga (solo ids que siguen en la ruta)
+        const valid = new Set(rs.map((s) => s.id));
+        setLoaded(new Set((cg.loaded_stop_ids || []).filter((id) => valid.has(id))));
       })
       .catch(() => toast.error("No se pudo cargar la lista"))
       .finally(() => setLoading(false));
   }, []);
+
+  const persist = (nextSet) => { saveMyCarga([...nextSet]).catch(() => {}); };
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
   if (items.length === 0) return (
@@ -43,8 +48,8 @@ export const CargaLista = ({ onFinish }) => {
   const current = items.find((it) => !loaded.has(it.id));
   const loadedList = items.filter((it) => loaded.has(it.id));
 
-  const ingresar = () => { if (current) setLoaded((s) => new Set(s).add(current.id)); };
-  const devolver = (id) => setLoaded((s) => { const n = new Set(s); n.delete(id); return n; });
+  const ingresar = () => { if (current) setLoaded((s) => { const n = new Set(s); n.add(current.id); persist(n); return n; }); };
+  const devolver = (id) => setLoaded((s) => { const n = new Set(s); n.delete(id); persist(n); return n; });
 
   const proceed = async () => {
     setSaving(true);
