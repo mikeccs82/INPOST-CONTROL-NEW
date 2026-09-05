@@ -96,7 +96,18 @@ export const DriverApp = ({ user, onLogout }) => {
 
       {screen === "carga-orden" && <CargaOrden count={stops.length} onNext={() => setScreen("carga-lista")} />}
 
-      {screen === "carga-lista" && <CargaLista />}
+      {screen === "carga-lista" && <CargaLista onFinish={() => { load(); setScreen("reparto"); }} />}
+
+      {screen === "reparto" && (
+        <div data-testid="reparto-view" className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-slate-950">
+          <div className="w-16 h-16 rounded-2xl bg-[#F26A21]/15 border border-[#F26A21]/40 flex items-center justify-center mb-4">
+            <Truck size={32} className="text-[#F26A21]" />
+          </div>
+          <h1 className="text-xl font-bold text-white mb-1">Ruta a Reparto</h1>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#F26A21] mb-3">Paso 4</p>
+          <p className="text-slate-400 text-sm">Próximamente</p>
+        </div>
+      )}
 
       {screen === "paradas" && (
         <RouteStopsView stops={allStops} routeName={routeNumber ? `Ruta ${routeNumber}` : null} />

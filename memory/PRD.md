@@ -123,3 +123,9 @@
 - CargaOrden: botón "Siguiente" (carga-orden-next) -> screen 'carga-lista'.
 - Nuevo CargaLista.jsx (screen 'carga-lista'): junta driver_route.stops (orden reparto -> nº parada = index+1) con saca_session.positions (por stop_id -> posición, sacas, bultos, order_id). Recorre de ATRÁS hacia adelante (última->primera). Tarjeta grande por parada: Parada, Posición, ID orden, Sacas, Bultos + botón grande "Ingresado al furgón" (carga-lista-ingresado) que avanza. Barra de progreso, botón Anterior, y pantalla final "¡Furgón cargado!". Solo frontend (GET my/route-config + my/sacas).
 - Verificado por captura (flujo 7 paradas driver 1122).
+
+## Carga al furgón: lista + capacidad (2026-06-05)
+- CargaLista.jsx: tarjeta actual arriba (Ingresado al furgón) + lista de ingresadas abajo con "Devolver a nave" (baja contador, vuelve a pendiente). Contador "Paradas subidas". Botón dinámico: completo -> "Siguiente"; incompleto -> "No tengo más capacidad" -> modal confirm ("dejar restantes en nave") -> saveDriverRouteOrder(solo cargadas) -> onFinish (recarga + screen 'reparto').
+- DriverApp: CargaOrden onNext->'carga-lista'; CargaLista onFinish->load()+setScreen('reparto'). Nueva screen 'reparto' (Paso 4, Próximamente).
+- Persistencia: la ruta final (solo cargadas) se guarda vía PUT /my/driver-route/order.
+- Verificado por captura (ingresar/devolver/modal/confirm->reparto).
