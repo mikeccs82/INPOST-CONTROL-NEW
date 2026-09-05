@@ -145,15 +145,15 @@ export const RepartoView = () => {
             {onsite && mode === null && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <button data-testid="reparto-entregar" onClick={() => setMode("entregar")} disabled={curP.delivered}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors disabled:opacity-60 bg-emerald-600 hover:bg-emerald-500 text-white">
+                  <button data-testid="reparto-entregar" onClick={() => setMode("entregar")}
+                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-emerald-600 hover:bg-emerald-500 text-white">
                     {curP.delivered ? <CheckCircle2 size={22} /> : <PackageOpen size={22} />}
-                    {curP.delivered ? "Entregado" : "Entregar"}
+                    {curP.delivered ? "Entregado ✓" : "Entregar"}
                   </button>
-                  <button data-testid="reparto-recoger" onClick={() => { setPickQty(curP.pickupSacas || 0); setMode("recoger"); }} disabled={curP.pickedUp}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors disabled:opacity-60 bg-[#1E5AA8] hover:bg-[#184a8c] text-white">
+                  <button data-testid="reparto-recoger" onClick={() => { setPickQty(curP.pickupSacas || 0); setMode("recoger"); }}
+                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-[#1E5AA8] hover:bg-[#184a8c] text-white">
                     {curP.pickedUp ? <CheckCircle2 size={22} /> : <PackagePlus size={22} />}
-                    {curP.pickedUp ? `Recogido (${curP.pickupSacas})` : "Recoger"}
+                    {curP.pickedUp ? `Recogido ✓ (${curP.pickupSacas})` : "Recoger"}
                   </button>
                 </div>
                 <button data-testid="reparto-incidencia" onClick={() => setIncModal(true)}

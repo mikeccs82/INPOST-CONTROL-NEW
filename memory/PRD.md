@@ -151,6 +151,11 @@
 - HORARIOS: cada tarjeta (actual y lista) muestra la ventana horaria (window_from - window_to) entre el nombre y la dirección con icono reloj.
 - LISTA SELECCIONABLE: cada parada de la lista es pulsable; al seleccionarla despliega su botón "Ir con Google Maps". Badges por estado (Actual/Hecha/Vuelvo/Cerrado).
 - Verificado: curl (GET/PUT persiste) + captura (flujo completo entregar/recoger, modal incidencia sí->detalle, recarga mantiene 3/3, lista Ir).
+
+## Reparto: lista con 2 botones + entregar/recoger re-pulsables (2026-06-09)
+- Lista "Todas las paradas": al seleccionar una parada aparecen 2 botones: "Ir con Google Maps" y "Ya estoy en el sitio" (este último hace esa parada la actual y entra en modo en-sitio).
+- FIX reporte usuario ("al volver a una parada no me deja entregar/recoger"): los botones Entregar/Recoger ya NO se deshabilitan cuando están hechos; muestran "Entregado ✓" / "Recogido ✓ (N)" pero siguen pulsables para corregir/re-registrar. La causa del reporte era estado previo (parada ya servida) que bloqueaba los botones.
+- Verificado por captura.
 - BUG usuario: "no se está memorizando la carga del vehículo". El set `loaded` de CargaLista vivía solo en estado local; al recargar/volver se perdía el progreso.
 - FIX: nueva colección independiente `carga_sessions` (diario por conductor+fecha) para registrar qué paradas ya se ingresaron al furgón.
   - Backend: GET /api/my/carga (devuelve {date, loaded_stop_ids} del día) y PUT /api/my/carga (upsert por driver_id+date con loaded_stop_ids, route_config_id, route_number, updated_at). Modelo CargaBody.
