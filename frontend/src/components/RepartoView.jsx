@@ -64,7 +64,7 @@ export const RepartoView = () => {
     </div>
   );
 
-  const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.delivered || p.pickedUp || p.incidencia?.tipo === "definitivo"); };
+  const isDone = (s) => { const p = progress[s.id] || {}; return !!(p.done || p.incidencia?.tipo === "definitivo"); };
   const pending = stops.filter((s) => !isDone(s));
   const finished = stops.length > 0 && pending.length === 0;
   const cur = (idx < stops.length && !isDone(stops[idx])) ? stops[idx] : null;
@@ -87,7 +87,7 @@ export const RepartoView = () => {
     setProgress(np); setIdx(nextIdx); persist(nextIdx, np); resetLocal();
   };
 
-  const onEntregado = () => { setStopProgress({ delivered: true, deliveredSacas: curMeta.sacas ?? 0, deliveredBultos: curMeta.bultos ?? 0 }); setMode(null); toast.success("Entrega registrada"); };
+  const onEntregado = () => { setStopProgress({ delivered: true, deliveredSacas: curMeta.sacas ?? 0, deliveredBultos: curMeta.bultos ?? 0 }); setPickQty(curP.pickupSacas || 0); setMode("recoger"); toast.success("Entrega registrada. Ahora registra la recogida."); };
   const onRecogido = () => { setStopProgress({ pickedUp: true, pickupSacas: pickQty }); setMode(null); toast.success(`Recogida registrada: ${pickQty} sacas`); };
 
   // Incidencia en sitio (cerrado)
@@ -95,7 +95,10 @@ export const RepartoView = () => {
   const incDefinitivo = () => { advance({ incidencia: { tipo: "definitivo", detalle: defDetail || "" }, done: true }); toast.warning("Cerrado definitivo registrado"); };
 
   // Siguiente parada tras servir -> preguntar incidencia
-  const onNextStop = () => { if (serviced) setEndModal(true); else advance(); };
+  const onNextStop = () => {
+    if (!curP.pickedUp) { toast.error("Registra la recogida (aunque sea 0) antes de continuar"); setPickQty(curP.pickupSacas || 0); setMode("recoger"); return; }
+    if (serviced) setEndModal(true); else advance();
+  };
   const endSi = () => { setEndDetail(""); };
   const endNo = () => { advance({ done: true }); };
   const endGuardar = () => { advance({ done: true, incidencia: { tipo: "general", detalle: endDetail || "" } }); };
@@ -103,7 +106,7 @@ export const RepartoView = () => {
   const badgeOf = (p) => {
     if (!p) return null;
     if (p.incidencia?.tipo === "definitivo") return { t: "Cerrado", c: "text-red-400" };
-    if (p.done || p.delivered || p.pickedUp) return { t: "Hecha", c: "text-emerald-400" };
+    if (p.done) return { t: "Hecha", c: "text-emerald-400" };
     if (p.incidencia?.tipo === "vuelvo") return { t: "Vuelvo", c: "text-amber-400" };
     return null;
   };
