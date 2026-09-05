@@ -3,7 +3,7 @@ import { Toaster, toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Upload, Save, Download, FolderOpen, Route as RouteIcon, Zap,
-  Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw, LogOut, Send,
+  Clock, Ruler, MapPin, Loader2, Timer, Users, RotateCcw, LogOut, Send, ArrowLeft,
 } from "lucide-react";
 import { MapView } from "./components/MapView";
 import { StopList } from "./components/StopList";
@@ -26,7 +26,7 @@ import "./App.css";
 const LOGO = "https://customer-assets-39nsmqrw.emergentagent.net/job_address-mapper-32/artifacts/wu9rybxe_LOGO%20NUEVO%20%282%29.jpeg";
 const genId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
 
-function App({ user, onLogout }) {
+function App({ user, onLogout, onBack }) {
   const [stops, setStops] = useState([]);
   const [geometry, setGeometry] = useState(null);
   const [legs, setLegs] = useState(null);
@@ -312,6 +312,12 @@ function App({ user, onLogout }) {
       {/* Header */}
       <header className="min-h-16 shrink-0 bg-white border-b-2 border-[#F26A21] flex flex-wrap items-center justify-between gap-y-2 px-3 md:px-4 py-2 z-20">
         <div className="flex items-center gap-3">
+          {onBack && (
+            <button data-testid="sim-back-btn" onClick={onBack} title="Volver al panel"
+              className="flex items-center justify-center w-9 h-9 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700">
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <img src={LOGO} alt="BoxLogic" className="h-11 w-auto" data-testid="brand-logo" />
           <div className="hidden sm:block border-l border-slate-200 pl-3">
             <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Optimizador de rutas</p>

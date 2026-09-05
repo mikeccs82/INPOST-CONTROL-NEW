@@ -44,3 +44,13 @@
 - Backend: PUT /api/my/route/comment {stop_id, comment} -> guarda stops.$.driver_comment en la asignación de HOY. api.js: saveStopComment().
 - Botones con pasos: Ordenar Sacas (Paso 1), Ordenar ruta (Paso 2), Carga vehículo (Paso 3), Ruta a Reparto (Paso 4). Sin paso: Datos de la ruta, Paradas de la ruta.
 - Probado end-to-end (backend curl + screenshot móvil): guardado y persistencia OK.
+
+## Panel de Administración + Configuración de rutas (2026-06-05)
+- AppRoot: admin -> AdminApp (nuevo shell con dashboard), driver -> DriverApp.
+- AdminDashboard: 4 tarjetas grandes -> Configuración de rutas, Estado rutas (PRÓXIMAMENTE/mock toast), Conductores (abre UsersDialog), Simulación de ruta (herramienta App.js original con botón sim-back-btn para volver).
+- Configuración de rutas (RouteConfigPanel): tarjetas horizontales por ruta (Ruta {number} · conductor · nº paradas · carga · muelle · fecha actualización). Botón abajo "Agregar nueva ruta".
+  - Detalle editable (número, conductor, hora carga, muelle nº, hora salida) + "Ver paradas", "Actualizar paradas" (sube Excel, reemplaza paradas), Eliminar ruta.
+  - REGLA DE ORO: 1 ruta por conductor (backend 409 + dropdown marca "— ya tiene ruta" y deshabilita).
+- Backend: colección route_configs. Endpoints GET/POST/PUT/DELETE /api/route-configs, GET /api/route-configs/{id}, POST /api/route-configs/{id}/stops (Excel). Helper _parse_stops_from_df reutilizado por import-excel. Paradas se guardan SIN optimizar; se geocodifican automáticamente las que no traen coords (mejor candidato).
+- Probado: 91/91 backend pytest (18 nuevos), 100% flujos frontend (testing agent iteration_6). Sin bugs bloqueantes.
+- Pendiente de hablar con el usuario: cómo ve el conductor su ruta desde route_configs (hoy el conductor sigue leyendo la colección `assignments` por fecha; NO está enlazado aún con route_configs).

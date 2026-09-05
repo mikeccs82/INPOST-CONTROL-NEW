@@ -85,6 +85,18 @@ export const myDates = async () => (await client.get("/my/dates")).data;
 export const updateMyOrder = async (date, stops) => (await client.put("/my/route/order", { date, stops })).data;
 export const saveStopComment = async (stopId, comment) => (await client.put("/my/route/comment", { stop_id: stopId, comment })).data;
 
+// ---- Route Configs (Configuración de rutas) ----
+export const listRouteConfigs = async () => (await client.get("/route-configs")).data;
+export const getRouteConfig = async (id) => (await client.get(`/route-configs/${id}`)).data;
+export const createRouteConfig = async (p) => (await client.post("/route-configs", p)).data;
+export const updateRouteConfig = async (id, p) => (await client.put(`/route-configs/${id}`, p)).data;
+export const deleteRouteConfig = async (id) => (await client.delete(`/route-configs/${id}`)).data;
+export const updateConfigStops = async (id, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return (await client.post(`/route-configs/${id}/stops`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+};
+
 export const saveRoute = async (payload) => {
   const { data } = await client.post("/routes", payload);
   return data;

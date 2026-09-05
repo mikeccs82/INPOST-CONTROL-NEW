@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import App from "./App";
+import { AdminApp } from "./components/AdminApp";
 import { DriverApp } from "./components/DriverApp";
 import { LoginScreen } from "./components/LoginScreen";
 import { authMe } from "./lib/api";
@@ -19,6 +19,6 @@ export default function AppRoot() {
   if (loading) return <div className="min-h-screen bg-slate-900" />;
   if (!user) return <LoginScreen onAuthed={setUser} />;
   return user.role === "admin"
-    ? <App user={user} onLogout={logout} />
+    ? <AdminApp user={user} onLogout={logout} />
     : <DriverApp user={user} onLogout={logout} />;
 }

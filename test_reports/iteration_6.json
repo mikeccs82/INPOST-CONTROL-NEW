@@ -1,0 +1,83 @@
+{
+  "summary": "Iteration 6: full test of the NEW admin Dashboard + 'Configuración de rutas' (route_configs) feature, plus driver-flow regression. Backend: created /app/backend/tests/test_route_configs.py (18 tests: auth/RBAC, CRUD+persistence, 1-route-per-driver 409 on create & update, driver freed after delete, Excel stops upload 36 paradas, 404/400 edge cases) — 18/18 pass; full suite /app/backend/tests/ = 91/91 pass (no regressions). Frontend (1280x800 admin): login as admin lands on admin-dashboard with the 4 cards + admin-logout; 'Estado rutas' shows the 'Próximamente' toast and does NOT navigate; 'Conductores' opens users-dialog (closes with close-users-dialog); 'Configuración de rutas' opens route-config-panel; created Ruta 8500 (driver mike stelluti 1111, carga 06:15, muelle 7, salida 07:00) -> card appears with correct data; duplicate assignment to the same driver -> 409 + red toast 'Ese conductor ya tiene una ruta asignada' and no duplicate card; detail modal pre-fills values, edit + 'Guardar cambios' persists (verified by closing and reopening: 8500-EDIT / muelle 11 / carga 05:45); 'Ver paradas' shows the empty-state, after uploading /app/sample_new.xlsx the counter went 0 -> 36 paradas and rc-stops-viewer listed 36 rows with name/address/window (rc-stop-0 = LOCKER LAVANDERIA RENTA RAPID, 08:00 -> 22:00); delete with window.confirm removed the card, closed the detail and freed the driver (re-created Ruta 8600 for the same driver OK); admin-back and Simulación de ruta / sim-back-btn navigation OK. Driver regression (430x900): login 1001/2002 -> driver-dashboard (6 cards, 4 correctly badged Próximamente), 'Ordenar ruta' renders the leaflet map with the 3 seeded stops, 'Paradas de la ruta' opens route-stops-view, a comment saved on route-stop-comment-0 persisted after a full page reload (PUT /api/my/route/comment), back-to-dashboard and both logouts work. All UI text is in Spanish. No blocking bug found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/route-configs/{id}",
+        "issue": "Full-body replacement with Pydantic defaults: a partial payload silently wipes the omitted fields (number->\"\", load_time->\"\", departure_time->\"\", dock->null, driver_id->null, which also releases the driver). The UI always sends every field so no user-visible bug today, but any partial PUT (or a future form) will destroy data. Consider exclude_unset / a PATCH-style update."
+      },
+      {
+        "endpoint": "POST /api/route-configs (uniqueness)",
+        "issue": "The 1-route-per-driver rule is only enforced in application code (find_one then insert). There is no unique index on route_configs.driver_id, so two concurrent creates can both succeed. Add a partial unique index (driver_id, unique, partialFilterExpression driver_id exists)."
+      },
+      {
+        "endpoint": "POST /api/route-configs/{id}/stops",
+        "issue": "Stops whose address could not be geocoded are silently dropped (stops = [s for s in stops if lat/lon]). The response only reports the final stops_count, so the admin cannot tell that N rows of the Excel were discarded. Return/report discarded rows."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Panel de administración (admin-dashboard) @1280x800",
+        "issues": [
+          "Cards are aspect-square inside max-w-2xl with a 2-column grid, so on desktop the bottom row ('Conductores', 'Simulación de ruta') and the 'Cerrar sesión' button fall below the fold and require scrolling; a lot of empty space on both sides. Consider grid-cols-4 / a max height for the cards on >=lg."
+        ]
+      },
+      {
+        "screen": "Nueva ruta / detalle (rc-driver select)",
+        "issues": [
+          "The 'Conductor' dropdown lists ALL drivers, including those that already have a route, so the 1-route-per-driver violation is only surfaced as an error toast after submitting. Better: mark/disable taken drivers (e.g. 'Carlos Ruiz (1001) — ya tiene ruta')."
+        ]
+      },
+      {
+        "screen": "Conductores (users-dialog)",
+        "issues": [
+          "Dialog does not close on Escape nor on backdrop click (only the X / close-users-dialog). Inconsistent with the rc-* modals, which do close on backdrop click."
+        ]
+      },
+      {
+        "screen": "Driver 'Ordenar ruta' stop list / rc time fields",
+        "issues": [
+          "Carry-over from iteration 4/5: native browser time inputs (12h AM/PM + native clock icon) inside the custom dark UI (rc-load, rc-departure, stop-wfrom/wto). Cosmetic only."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_route_configs.py",
+    "/app/backend/tests/seed_driver_assignment.py",
+    "/app/test_reports/pytest/pytest_iter6_rc.xml",
+    "/app/test_reports/pytest/pytest_iter6_all.xml"
+  ],
+  "action_items": [
+    "Optional (minor): make PUT /api/route-configs/{id} partial-update safe (exclude_unset) so omitted fields are not wiped.",
+    "Optional (minor): add a unique partial index on route_configs.driver_id to enforce the golden rule at DB level.",
+    "Optional (UX): mark/disable already-assigned drivers in the rc-driver select instead of only failing with a 409 toast.",
+    "Optional (UX): report Excel rows discarded because they could not be geocoded during POST /route-configs/{id}/stops.",
+    "Optional (design): admin dashboard fits poorly on a 1280x800 desktop viewport (bottom cards below the fold)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1232 lines — split into routers (auth/users, assignments, route_configs, optimize/geocode) before it grows further.",
+    "RouteConfigPanel.jsx correctly reloads the list via onChanged() after create/update/upload/delete and shows loading/error toasts for every call; no _id leaks were observed in any /api/route-configs response.",
+    "update_route_config() rewrites driver_id from the body default (None) when omitted, which silently releases the driver — see minor backend issue.",
+    "GET /api/route-configs strips the heavy 'stops' array and returns stops_count only (verified) — good for list performance."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_route_configs.py",
+    "/app/backend/tests/seed_driver_assignment.py"
+  ],
+  "success_rate": {
+    "backend": "100% (91/91 pytest, incl. 18 new route_configs tests)",
+    "frontend": "100% of tested flows (admin dashboard, 4 cards, configs CRUD, 409 rule, stops viewer, Excel upload, delete, navigation, driver regression)"
+  },
+  "seed_data_creation": "Driver user 9901 'TEST_Free QA' (password 2002) created by the backend tests as a spare free driver (left in place, harmless). TODAY's assignment 'TEST_Ruta Conductor' with 3 TEST_ stops created for driver 1001 via /app/backend/tests/seed_driver_assignment.py so the driver UI flow could be exercised (route-stop-comment-0 contains 'TEST_comentario QA 0705'). All test route_configs (8500/8500-EDIT/8600) were deleted; only the pre-existing Ruta 8010 (Carlos Ruiz, 36 paradas) remains.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin 5708699/16288959, driver 1001/2002, spare free driver 9901/2002",
+  "context_for_next_testing_agent": "New feature is fully working end-to-end. Run `python /app/backend/tests/seed_driver_assignment.py` first if the driver flow needs a route for today (driver 1001 has no assignment by default). Run test_route_configs.py with `-n 0` (xdist parallelism makes the shared driver 9901 / 409 tests race). Playwright notes: this Playwright build has no Locator.all_inner_text (use all_text_contents), and f-strings containing escaped quotes break the runner — build selectors by concatenation. Driver back button testid is 'back-to-dashboard'; users-dialog close testid is 'close-users-dialog'. The recurring console error 'In HTML, <span> cannot be a child of <option>' comes from the Emergent visual-editing instrumentation wrapping the rc-driver options, not from app code.",
+  "rca_of_the_issue": "No defect to root-cause this iteration. The only test-side failures were my own selector/API mistakes (wrong users-dialog close testid, Locator.all_inner_text unavailable) and one toast assertion that ran after the sonner auto-dismiss window (functionality verified instead via the 0 -> 36 paradas counter and the 36 rc-stop-* rows)."
+}

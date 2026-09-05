@@ -491,14 +491,7 @@ def _service_seconds(stops):
     return sum(float(d.get("service_min") or 0) for d in dumps) * 60
 
 
-@api_router.post("/import-excel")
-async def import_excel(file: UploadFile = File(...)):
-    content = await file.read()
-    try:
-        df = pd.read_excel(io.BytesIO(content))
-    except Exception as e:
-        raise HTTPException(400, f"No se pudo leer el archivo: {e}")
-
+def _parse_stops_from_df(df):
     cols = {str(c).strip().lower(): c for c in df.columns}
 
     def pick(*names):
@@ -526,7 +519,6 @@ async def import_excel(file: UploadFile = File(...)):
         return t if t in ("P", "PD", "L") else None
 
     stops = []
-    to_geocode = []
     for _, row in df.iterrows():
         def val(col):
             if col is None:
@@ -557,8 +549,19 @@ async def import_excel(file: UploadFile = File(...)):
             "lon": float(lon) if lon is not None else None,
         }
         stops.append(stop)
-        if (stop["lat"] is None or stop["lon"] is None) and stop["address"]:
-            to_geocode.append(stop)
+    return stops
+
+
+@api_router.post("/import-excel")
+async def import_excel(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"No se pudo leer el archivo: {e}")
+
+    stops = _parse_stops_from_df(df)
+    to_geocode = [s for s in stops if (s["lat"] is None or s["lon"] is None) and s["address"]]
 
     # Geocode missing addresses with candidates (Nominatim -> Photon fallback, cached)
     pending_info = {}
@@ -947,6 +950,14 @@ class CommentBody(BaseModel):
     comment: str = ""
 
 
+class RouteConfigBody(BaseModel):
+    number: str = ""
+    driver_id: Optional[str] = None
+    load_time: str = ""
+    dock: Optional[int] = None
+    departure_time: str = ""
+
+
 def create_token(u):
     payload = {"sub": u["id"], "role": u.get("role", "driver"), "exp": datetime.now(timezone.utc) + timedelta(days=30)}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm="HS256")
@@ -1087,6 +1098,105 @@ async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
     if r.matched_count == 0:
         raise HTTPException(404, "Parada no encontrada")
     return {"ok": True}
+
+
+# ---- Route Configs (Configuración de rutas, admin) ----
+async def _enrich_config(doc):
+    if not doc:
+        return doc
+    doc["stops_count"] = len(doc.get("stops", []))
+    drv = None
+    if doc.get("driver_id"):
+        u = await db.users.find_one({"id": doc["driver_id"]}, {"_id": 0, "password_hash": 0})
+        if u:
+            drv = {"id": u["id"], "username": u.get("username"), "nombres": u.get("nombres", ""), "apellidos": u.get("apellidos", "")}
+    doc["driver"] = drv
+    return doc
+
+
+@api_router.get("/route-configs")
+async def list_route_configs(admin=Depends(require_admin)):
+    docs = await db.route_configs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    out = []
+    for d in docs:
+        d = await _enrich_config(d)
+        d.pop("stops", None)
+        out.append(d)
+    return out
+
+
+@api_router.get("/route-configs/{cid}")
+async def get_route_config(cid: str, admin=Depends(require_admin)):
+    doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Ruta no encontrada")
+    return await _enrich_config(doc)
+
+
+@api_router.post("/route-configs")
+async def create_route_config(body: RouteConfigBody, admin=Depends(require_admin)):
+    if body.driver_id:
+        if not await db.users.find_one({"id": body.driver_id, "role": "driver"}):
+            raise HTTPException(404, "Conductor no encontrado")
+        if await db.route_configs.find_one({"driver_id": body.driver_id}):
+            raise HTTPException(409, "Ese conductor ya tiene una ruta asignada")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = body.model_dump()
+    doc.update({"id": str(uuid.uuid4()), "stops": [], "created_at": now, "updated_at": now})
+    await db.route_configs.insert_one(doc)
+    return await _enrich_config({k: v for k, v in doc.items() if k != "_id"})
+
+
+@api_router.put("/route-configs/{cid}")
+async def update_route_config(cid: str, body: RouteConfigBody, admin=Depends(require_admin)):
+    existing = await db.route_configs.find_one({"id": cid})
+    if not existing:
+        raise HTTPException(404, "Ruta no encontrada")
+    if body.driver_id:
+        if not await db.users.find_one({"id": body.driver_id, "role": "driver"}):
+            raise HTTPException(404, "Conductor no encontrado")
+        dup = await db.route_configs.find_one({"driver_id": body.driver_id, "id": {"$ne": cid}})
+        if dup:
+            raise HTTPException(409, "Ese conductor ya tiene una ruta asignada")
+    upd = body.model_dump()
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.route_configs.update_one({"id": cid}, {"$set": upd})
+    doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
+    return await _enrich_config(doc)
+
+
+@api_router.delete("/route-configs/{cid}")
+async def delete_route_config(cid: str, admin=Depends(require_admin)):
+    r = await db.route_configs.delete_one({"id": cid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Ruta no encontrada")
+    return {"ok": True}
+
+
+@api_router.post("/route-configs/{cid}/stops")
+async def update_config_stops(cid: str, file: UploadFile = File(...), admin=Depends(require_admin)):
+    if not await db.route_configs.find_one({"id": cid}):
+        raise HTTPException(404, "Ruta no encontrada")
+    content = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"No se pudo leer el archivo: {e}")
+    stops = _parse_stops_from_df(df)
+    # geocode missing coords automatically (best candidate, non-blocking)
+    to_geo = [s for s in stops if (s["lat"] is None or s["lon"] is None) and s["address"]]
+    for idx, s in enumerate(to_geo):
+        if idx > 0:
+            await asyncio.sleep(1.0)
+        cands = await _geocode_candidates(s["address"])
+        if cands:
+            s["lat"] = cands[0]["lat"]
+            s["lon"] = cands[0]["lon"]
+    stops = [s for s in stops if s["lat"] is not None and s["lon"] is not None]
+    now = datetime.now(timezone.utc).isoformat()
+    await db.route_configs.update_one({"id": cid}, {"$set": {"stops": stops, "updated_at": now}})
+    doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
+    return await _enrich_config(doc)
 
 
 @app.on_event("startup")
