@@ -1,0 +1,24 @@
+{
+  "summary": "Verified new driver Sacas->Ordenar ruta integration end-to-end. Backend: 5/5 pytest cases passing (1 intentional skip) in /app/backend/tests/test_driver_route_build.py covering GET /api/my/route-config shape, POST /api/my/route/build (400 when no positions, happy path with OSRM+OR-Tools optimizing 3 stops from warehouse), PUT /api/my/driver-route/order reorder persistence, and PUT /api/my/route/comment now writing into route_configs.stops.$.driver_comment (persists and is read by GET /api/my/route-config; 404 for unknown stop). Frontend (390x844): login driver 1122/1122 -> dashboard -> 'Ordenar ruta' with driver_route=null shows 'Aún no has preparado la ruta' + go-sacas-btn (works). SacasSort registers stops (3644, 3275, 0544 all recognized), sacas-next-step is disabled with 0 positions and enabled after 3, click triggers /api/my/route/build. After build, 'Ordenar ruta' shows: 3 paradas ordenadas header, distance 15.7 km / 29 min, Leaflet map with warehouse S/E marker + orange route line + numbered stop markers, ordered stop-list with 3 items, NO driver-date selector (removed). 'Paradas de la ruta' (RouteStopsView) shows all 36 route_config stops with comment input per parada. Admin dashboard (1280x800) loads all 4 cards (Configuración de rutas, Estado rutas, Conductores, Simulación de ruta). NOTE: during initial Playwright run the build call was interrupted by backend hot-reload (pytest file save mid-flow) so driver_route was not persisted; on retry (build already made via curl in 1s) the UI rendered correctly. This is a test-harness artifact, not a product bug.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_driver_route_build.py",
+    "/app/test_reports/pytest/driver_route_build.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py POST /my/route/build correctly filters recognized stops (with lat/lon), applies service_by_type per stop, optimizes from settings.start with round_trip when same_as_start, and persists driver_route in route_configs. Uses reuse of optimize() which is clean.",
+    "PUT /my/route/comment now targets route_configs (stops.$.driver_comment) — good move. However /my/route/order (line ~1105) still targets db.assignments and requires body.date == today; this legacy endpoint is unused by the new DriverApp (which calls saveDriverRouteOrder -> /my/driver-route/order) and could be removed to reduce confusion.",
+    "/my/dates (line ~1100) also still reads assignments and is dead code from the driver UI perspective now that DriverApp no longer uses date selection.",
+    "DriverApp.jsx: openRoute() calls load() then setScreen('route') — load is async, so the first render of 'route' can briefly show 'Aún no has preparado la ruta' before driverRoute state updates; consider awaiting load or introducing a loading flag. Not a blocker (transient <1s)."
+  ],
+  "updated_files": ["/app/backend/tests/test_driver_route_build.py (new)"],
+  "success_rate": {"backend": "100% (5/5 passed, 1 skipped)", "frontend": "100% of critical flows"},
+  "test_credentials": "Admin 5708699/16288959; Driver 1122/1122 (Ruta 8010, 36 paradas)",
+  "seed_data_creation": "Autouse fixture ensures settings.start (Nave Central, 41.3350/2.1300, 08:00, same_as_start=true) is set if missing. Test reorders driver_route stops and leaves them reversed relative to build order; driver_comment written and then cleared to empty string.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The new endpoints POST /my/route/build, GET /my/route-config, PUT /my/driver-route/order and updated PUT /my/route/comment are covered in test_driver_route_build.py — run with -n 0 (single driver). Backend hot-reload from saving files mid-flow can abort in-flight build calls, so avoid touching backend files while running UI tests. Legacy /my/route/order (assignments-based) and /my/dates are still present but unused by DriverApp; main agent may want to clean them up.",
+  "rca of the issue": "N/A — no bugs. Integration works end-to-end. One transient UX note: DriverApp.openRoute triggers async load then screen switch; first paint may briefly show the empty-state prompt for <1s before driverRoute state hydrates."
+}

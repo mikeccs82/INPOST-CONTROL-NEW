@@ -86,6 +86,9 @@ export const updateMyOrder = async (date, stops) => (await client.put("/my/route
 export const saveStopComment = async (stopId, comment) => (await client.put("/my/route/comment", { stop_id: stopId, comment })).data;
 export const mySacas = async () => (await client.get("/my/sacas")).data;
 export const saveMySacas = async (payload) => (await client.put("/my/sacas", payload)).data;
+export const myRouteConfig = async () => (await client.get("/my/route-config")).data;
+export const buildMyRoute = async () => (await client.post("/my/route/build")).data;
+export const saveDriverRouteOrder = async (stops) => (await client.put("/my/driver-route/order", { date: new Date().toISOString().slice(0,10), stops })).data;
 
 // ---- Route Configs (Configuración de rutas) ----
 export const listRouteConfigs = async () => (await client.get("/route-configs")).data;

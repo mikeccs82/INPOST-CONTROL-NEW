@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes } from "lucide-react";
-import { mySacas, saveMySacas } from "../lib/api";
+import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight } from "lucide-react";
+import { mySacas, saveMySacas, buildMyRoute } from "../lib/api";
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
 const last4 = (s) => digits(s).slice(-4);
@@ -37,7 +37,7 @@ const wordsToDigits = (text) => {
   return out;
 };
 
-export const SacasSort = () => {
+export const SacasSort = ({ onNext }) => {
   const [loading, setLoading] = useState(true);
   const [stops, setStops] = useState([]);
   const [routeNumber, setRouteNumber] = useState(null);
@@ -46,6 +46,7 @@ export const SacasSort = () => {
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState(null); // {last4, kind:'new'|'existing'|'unknown', position, stopName}
   const [listening, setListening] = useState(false);
+  const [building, setBuilding] = useState(false);
   const recRef = useRef(null);
   const posRef = useRef(positions);
   const isoRef = useRef(isolated);
@@ -145,12 +146,36 @@ export const SacasSort = () => {
   const totalSacas = positions.reduce((a, p) => a + p.sacas, 0) + isolated.reduce((a, i) => a + i.sacas, 0);
   const totalBultos = positions.reduce((a, p) => a + p.bultos, 0);
 
+  const nextStep = async () => {
+    if (positions.length === 0) { toast.error("Primero registra al menos una parada"); return; }
+    setBuilding(true);
+    try {
+      await buildMyRoute();
+      toast.success("Ruta optimizada generada");
+      onNext?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo generar la ruta");
+    } finally {
+      setBuilding(false);
+    }
+  };
+
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
 
   return (
     <div data-testid="sacas-sort" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-1">Ordenar Sacas</h1>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h1 className="text-xl font-bold text-white">Ordenar Sacas</h1>
+          <button
+            data-testid="sacas-next-step"
+            onClick={nextStep}
+            disabled={building || positions.length === 0}
+            className="shrink-0 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold px-3.5 py-2 rounded-lg transition-colors"
+          >
+            {building ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />} Siguiente paso
+          </button>
+        </div>
         <p className="text-sm text-slate-400 mb-4">
           {routeNumber ? `Ruta ${routeNumber} · ` : ""}Di o escribe los últimos 4 dígitos del ID de orden
         </p>

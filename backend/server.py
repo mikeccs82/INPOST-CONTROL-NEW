@@ -1117,9 +1117,8 @@ async def my_order(body: OrderBody, user=Depends(get_current_user)):
 
 @api_router.put("/my/route/comment")
 async def my_stop_comment(body: CommentBody, user=Depends(get_current_user)):
-    d = _today()
-    r = await db.assignments.update_one(
-        {"driver_id": user["id"], "date": d, "stops.id": body.stop_id},
+    r = await db.route_configs.update_one(
+        {"driver_id": user["id"], "stops.id": body.stop_id},
         {"$set": {"stops.$.driver_comment": body.comment, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     if r.matched_count == 0:
@@ -1148,6 +1147,75 @@ async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
         {"id": rc["id"]},
         {"$set": {"saca_session": body.model_dump(), "saca_updated_at": datetime.now(timezone.utc).isoformat()}},
     )
+    return {"ok": True}
+
+
+@api_router.get("/my/route-config")
+async def my_route_config(user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]}, {"_id": 0})
+    if not rc:
+        return {"route_number": None, "stops": [], "driver_route": None}
+    return {"route_number": rc.get("number"), "stops": rc.get("stops", []), "driver_route": rc.get("driver_route")}
+
+
+@api_router.post("/my/route/build")
+async def build_my_route(user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]})
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
+    session = rc.get("saca_session") or {}
+    ids = [p.get("stop_id") for p in (session.get("positions") or []) if p.get("stop_id")]
+    stops_by_id = {s["id"]: s for s in rc.get("stops", [])}
+    recognized = [stops_by_id[i] for i in ids if i in stops_by_id]
+    recognized = [s for s in recognized if s.get("lat") is not None and s.get("lon") is not None]
+    if not recognized:
+        raise HTTPException(400, "No hay paradas ordenadas en Sacas todavía")
+
+    st = await db.settings.find_one({"id": "default"}, {"_id": 0}) or Settings().model_dump()
+    start = st.get("start")
+    end = st.get("end")
+    same = st.get("same_as_start", True)
+    sbt = st.get("service_by_type") or {}
+
+    stop_models = []
+    for s in recognized:
+        d = {k: v for k, v in s.items() if k != "driver_comment"}
+        d["service_min"] = float(sbt.get(s.get("stop_type") or "", st.get("service_time_min", 0)) or 0)
+        stop_models.append(Stop(**d))
+
+    req = OptimizeRequest(
+        stops=stop_models,
+        start=Waypoint(**start) if start else None,
+        end=Waypoint(**end) if (end and not same) else None,
+        round_trip=bool(same),
+        metric="duration",
+        departure_time=st.get("departure_time"),
+        respect_windows=bool(st.get("respect_windows", True)),
+    )
+    res = await optimize(req)
+    ordered = [stops_by_id[i] for i in res["order"] if i in stops_by_id]
+    driver_route = {
+        "stops": ordered,
+        "start": start,
+        "end": end if not same else None,
+        "round_trip": bool(same),
+        "departure_time": st.get("departure_time"),
+        "summary": res["summary"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": driver_route}})
+    return {"route_number": rc.get("number"), "driver_route": driver_route}
+
+
+@api_router.put("/my/driver-route/order")
+async def save_driver_route_order(body: OrderBody, user=Depends(get_current_user)):
+    rc = await db.route_configs.find_one({"driver_id": user["id"]})
+    if not rc or not rc.get("driver_route"):
+        raise HTTPException(404, "No tienes ruta construida")
+    dr = rc["driver_route"]
+    dr["stops"] = [s.model_dump() for s in body.stops]
+    dr["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.route_configs.update_one({"id": rc["id"]}, {"$set": {"driver_route": dr}})
     return {"ok": True}
 
 

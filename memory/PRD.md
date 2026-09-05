@@ -81,3 +81,12 @@
 - addrOf(last4) busca la dirección en los stops del route_config.
 - Estado BD preview: solo queda conductor 1122/1122 (mike); Ruta 8010 reasignada a 1122 (36 paradas). Los demás conductores fueron borrados.
 - PENDIENTE usuario: redeploy para que estos cambios lleguen a emergent.host.
+
+## Integración Sacas -> Ordenar ruta (Paso 1 -> Paso 2) (2026-06-05)
+- Botón "Siguiente paso" (sacas-next-step, arriba dcha en Ordenar Sacas) llama POST /api/my/route/build: optimiza SOLO las paradas registradas en Sacas (saca_session) desde la NAVE (settings.start), guarda route_config.driver_route {stops ordenadas, start, end, round_trip, departure_time, summary} y navega a "Ordenar ruta".
+- DriverApp reescrito: usa GET /api/my/route-config (NO más assignments por fecha). Eliminado selector de fecha. Pantalla route: spinner mientras carga -> si driver_route null muestra prompt "Aún no has preparado la ruta" (go-sacas-btn) -> si existe muestra mapa (nave S/E) + lista reordenable. Reorden persiste con PUT /api/my/driver-route/order.
+- PUT /api/my/route/comment ahora escribe en route_config.stops (no assignments). Paradas de la ruta usa todas las stops del route_config.
+- Nave de prueba en settings: Nave Central 41.3350/2.1300, same_as_start, 08:00.
+- Legacy sin usar (candidatos a limpiar): /api/my/route (assignments), /api/my/dates, /api/my/route/order.
+- Probado: testing agent iteration_10 (5/5 backend, 100% frontend, 0 bugs) + capturas. Mejora aplicada: spinner para evitar parpadeo del estado vacío.
+- PENDIENTE usuario: redeploy para que llegue a emergent.host.
