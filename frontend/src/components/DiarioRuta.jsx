@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Loader2, CalendarDays, Copy, Trash2, Plus, Phone, Clock, Anchor, Route as RouteIcon } from "lucide-react";
-import { routeJournal, listUsers, listRouteConfigs, addJournalEntry, updateJournalEntry, duplicateJournalEntry, deleteJournalEntry } from "../lib/api";
+import { Loader2, CalendarDays, Copy, Trash2, Plus, Phone, Clock, Anchor, Route as RouteIcon, ArrowUp, ArrowDown } from "lucide-react";
+import { routeJournal, listUsers, listRouteConfigs, addJournalEntry, updateJournalEntry, duplicateJournalEntry, deleteJournalEntry, loadAllJournal } from "../lib/api";
 
 const fmtDate = (d) => {
   try {
@@ -51,26 +51,60 @@ export const DiarioRuta = () => {
     try { await addJournalEntry({ date, route_config_id: cfg?.id, route_number: cfg?.number || "" }); setNewRoute(""); setAdding(false); load(date); }
     catch { toast.error("No se pudo agregar"); }
   };
+  const loadAll = async () => {
+    try { const r = await loadAllJournal(date); toast.success(r.added ? `${r.added} ruta(s) cargada(s)` : "Ya estaban todas cargadas"); load(date); }
+    catch { toast.error("No se pudieron cargar las rutas"); }
+  };
 
   const phoneOf = (e) => e.driver?.telefono || "—";
+
+  const [sortBy, setSortBy] = useState("route_number");
+  const [sortDir, setSortDir] = useState("asc");
+  const [filters, setFilters] = useState({});
+  const COLS = [
+    { key: "route_number", label: "Ruta" },
+    { key: "conductor", label: "Conductor" },
+    { key: "telefono", label: "Teléfono" },
+    { key: "load_time", label: "Hora carga" },
+    { key: "dock", label: "Muelle" },
+  ];
+  const valueOf = (e, k) => {
+    if (k === "conductor") return e.driver ? (`${e.driver.nombres} ${e.driver.apellidos}`.trim() || e.driver.username) : "";
+    if (k === "telefono") return e.driver?.telefono || "";
+    if (k === "dock") return e.dock ?? "";
+    return e[k] ?? "";
+  };
+  const toggleSort = (k) => { if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc")); else { setSortBy(k); setSortDir("asc"); } };
+  const displayed = entries
+    .filter((e) => COLS.every((c) => { const f = (filters[c.key] || "").toLowerCase().trim(); return !f || String(valueOf(e, c.key)).toLowerCase().includes(f); }))
+    .sort((a, b) => {
+      const av = valueOf(a, sortBy), bv = valueOf(b, sortBy);
+      const num = ["route_number", "dock"].includes(sortBy);
+      let r;
+      if (num) r = (parseFloat(av) || 0) - (parseFloat(bv) || 0);
+      else r = String(av).localeCompare(String(bv), "es", { numeric: true });
+      return sortDir === "asc" ? r : -r;
+    });
 
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-[#F26A21]" /></div>;
 
   return (
     <div data-testid="diario-view" className="flex-1 min-h-0 flex flex-col bg-slate-950">
-      {/* Barra de fecha */}
+      {/* Barra de fecha (siempre visible para ver días anteriores) */}
       <div className="shrink-0 flex items-center justify-between gap-2 bg-slate-900 border-b border-slate-700 px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <CalendarDays size={17} className="text-[#F26A21] shrink-0" />
           <span data-testid="diario-date" className="text-sm font-bold text-white truncate">{date ? fmtDate(date) : ""}</span>
           {!editable && <span className="text-[10px] font-bold uppercase text-amber-400 shrink-0">Solo lectura</span>}
         </div>
-        {dates.length > 1 && (
-          <select data-testid="diario-date-select" value={date || ""} onChange={(e) => load(e.target.value)}
-            className="shrink-0 bg-slate-800 border border-slate-600 text-white text-xs font-semibold rounded-md px-2 py-1.5 outline-none focus:border-[#F26A21]">
-            {dates.map((d) => <option key={d} value={d}>{d === today ? "Hoy" : d}</option>)}
-          </select>
-        )}
+        <input
+          data-testid="diario-date-input"
+          type="date"
+          value={date || ""}
+          max={today || undefined}
+          onChange={(e) => e.target.value && load(e.target.value)}
+          className="shrink-0 bg-slate-800 border border-slate-600 text-white text-xs font-semibold rounded-md px-2 py-1.5 outline-none focus:border-[#F26A21]"
+        />
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto thin-scroll p-4">
@@ -81,10 +115,16 @@ export const DiarioRuta = () => {
               <p className="text-sm text-slate-400">{entries.length} línea(s) · hora/muelle se editan en Configuración de rutas</p>
             </div>
             {editable && (
-              <button data-testid="diario-add-btn" onClick={() => setAdding((v) => !v)}
-                className="flex items-center gap-1.5 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold px-3.5 py-2 rounded-lg transition-colors">
-                <Plus size={16} /> Añadir ruta
-              </button>
+              <div className="flex items-center gap-2">
+                <button data-testid="diario-loadall-btn" onClick={loadAll}
+                  className="flex items-center gap-1.5 bg-[#1E5AA8] hover:bg-[#184a8c] text-white text-sm font-bold px-3.5 py-2 rounded-lg transition-colors">
+                  <RouteIcon size={16} /> Cargar todas las rutas
+                </button>
+                <button data-testid="diario-add-btn" onClick={() => setAdding((v) => !v)}
+                  className="flex items-center gap-1.5 bg-[#F26A21] hover:bg-[#f58220] text-white text-sm font-bold px-3.5 py-2 rounded-lg transition-colors">
+                  <Plus size={16} /> Añadir ruta
+                </button>
+              </div>
             )}
           </div>
 
@@ -102,20 +142,30 @@ export const DiarioRuta = () => {
           <div className="overflow-x-auto rounded-xl border border-slate-700">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-900 text-slate-400 text-left text-xs uppercase tracking-wide">
-                  <th className="px-3 py-2.5 font-bold"><RouteIcon size={13} className="inline mr-1" /> Ruta</th>
-                  <th className="px-3 py-2.5 font-bold">Conductor</th>
-                  <th className="px-3 py-2.5 font-bold"><Phone size={13} className="inline mr-1" /> Teléfono</th>
-                  <th className="px-3 py-2.5 font-bold"><Clock size={13} className="inline mr-1" /> Hora carga</th>
-                  <th className="px-3 py-2.5 font-bold"><Anchor size={13} className="inline mr-1" /> Muelle</th>
-                  {editable && <th className="px-3 py-2.5 font-bold text-right">Acciones</th>}
+                <tr className="bg-slate-900 text-slate-300 text-left text-xs uppercase tracking-wide">
+                  {COLS.map((c) => (
+                    <th key={c.key} className="px-3 py-2 font-bold align-top">
+                      <button data-testid={`diario-sort-${c.key}`} onClick={() => toggleSort(c.key)} className="flex items-center gap-1 hover:text-white">
+                        {c.label}
+                        {sortBy === c.key && (sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                      </button>
+                      <input
+                        data-testid={`diario-filter-${c.key}`}
+                        value={filters[c.key] || ""}
+                        onChange={(ev) => setFilters((f) => ({ ...f, [c.key]: ev.target.value }))}
+                        placeholder="Filtrar…"
+                        className="mt-1.5 w-full bg-slate-800 border border-slate-700 text-white text-[11px] normal-case font-normal rounded px-1.5 py-1 outline-none focus:border-[#F26A21]"
+                      />
+                    </th>
+                  ))}
+                  {editable && <th className="px-3 py-2 font-bold text-right align-top">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {entries.length === 0 && (
-                  <tr><td colSpan={editable ? 6 : 5} className="px-3 py-6 text-center text-slate-500">No hay rutas registradas este día.</td></tr>
+                {displayed.length === 0 && (
+                  <tr><td colSpan={editable ? 6 : 5} className="px-3 py-6 text-center text-slate-500">No hay rutas que coincidan.</td></tr>
                 )}
-                {entries.map((e) => (
+                {displayed.map((e) => (
                   <tr key={e.id} data-testid={`diario-row-${e.id}`} className="bg-slate-950 hover:bg-slate-900/60">
                     <td className="px-3 py-2.5 font-mono-tech font-bold text-white">{e.route_number || "—"}</td>
                     <td className="px-3 py-2.5">

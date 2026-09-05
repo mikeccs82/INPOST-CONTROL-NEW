@@ -1629,6 +1629,29 @@ async def delete_route_journal(eid: str, admin=Depends(require_admin)):
     return {"ok": True}
 
 
+@api_router.post("/route-journal/load-all")
+async def load_all_route_journal(date: Optional[str] = None, admin=Depends(require_admin)):
+    d = date or _today()
+    existing = await db.route_journal.find({"date": d}, {"_id": 0, "route_config_id": 1, "driver_id": 1}).to_list(1000)
+    seen = {(e.get("route_config_id"), e.get("driver_id")) for e in existing}
+    configs = await db.route_configs.find({}, {"_id": 0}).sort("number", 1).to_list(1000)
+    added = 0
+    for c in configs:
+        ids = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
+        rows = ids if ids else [None]
+        for did in rows:
+            if (c.get("id"), did) in seen:
+                continue
+            await db.route_journal.insert_one({
+                "id": str(uuid.uuid4()), "date": d, "route_config_id": c.get("id"),
+                "route_number": c.get("number", ""), "load_time": c.get("load_time", ""),
+                "dock": c.get("dock"), "driver_id": did,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            added += 1
+    return {"ok": True, "added": added}
+
+
 @api_router.post("/route-configs/{cid}/simulation")
 async def save_simulation(cid: str, body: SimulationBody, admin=Depends(require_admin)):
     if not await db.route_configs.find_one({"id": cid}):
