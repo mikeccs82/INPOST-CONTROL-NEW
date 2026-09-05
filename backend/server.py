@@ -274,6 +274,9 @@ def solve_vrptw(travel, service, windows, start, end, departure, penalty=30, tim
     horizon = 48 * 3600
     routing.AddDimension(idx, horizon, horizon, False, "Time")
     tdim = routing.GetDimensionOrDie("Time")
+    # Penaliza el tiempo total (incluye las esperas): si sale muy temprano y los PUDO
+    # aún están cerrados, evita esperar y prioriza los puntos abiertos/24h primero.
+    tdim.SetSpanCostCoefficientForVehicle(3, 0)
     tdim.CumulVar(routing.Start(0)).SetRange(int(departure), int(departure))
     for node in range(n):
         if node == start:
@@ -1398,6 +1401,34 @@ async def build_my_route(user=Depends(get_current_user)):
         upsert=True,
     )
     return {"route_number": rc.get("number"), "driver_route": driver_route}
+
+
+@api_router.post("/my/sacas/repeat-last")
+async def repeat_last_sacas(user=Depends(get_current_user)):
+    """Trae las paradas del último día laborable (copia sus sacas ordenadas a hoy),
+    solo si ese día tenía sacas ordenadas. Luego el conductor puede optimizar."""
+    rc = await _my_config(user, _today())
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
+    prev = _prev_working_day(_today())
+    sess = await db.saca_day_sessions.find_one({"driver_id": user["id"], "date": prev}, {"_id": 0})
+    if not sess or not sess.get("positions"):
+        raise HTTPException(404, "El último día laborable no tiene sacas ordenadas")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.saca_day_sessions.update_one(
+        {"driver_id": user["id"], "date": _today()},
+        {"$set": {
+            "driver_id": user["id"],
+            "date": _today(),
+            "route_config_id": rc["id"],
+            "positions": sess.get("positions", []),
+            "isolated": sess.get("isolated", []),
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "count": len(sess.get("positions", [])), "from": prev}
+
 
 
 @api_router.get("/my/carga")

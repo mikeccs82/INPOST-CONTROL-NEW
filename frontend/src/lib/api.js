@@ -88,6 +88,7 @@ export const mySacas = async (date) => (await client.get("/my/sacas", { params: 
 export const saveMySacas = async (payload) => (await client.put("/my/sacas", payload)).data;
 export const myRouteConfig = async (date) => (await client.get("/my/route-config", { params: date ? { date } : {} })).data;
 export const buildMyRoute = async () => (await client.post("/my/route/build")).data;
+export const repeatLastSacas = async () => (await client.post("/my/sacas/repeat-last")).data;
 export const saveDriverRouteOrder = async (stops) => (await client.put("/my/driver-route/order", { date: new Date().toISOString().slice(0,10), stops })).data;
 export const myCarga = async (date) => (await client.get("/my/carga", { params: date ? { date } : {} })).data;
 export const saveMyCarga = async (loadedStopIds) => (await client.put("/my/carga", { loaded_stop_ids: loadedStopIds })).data;

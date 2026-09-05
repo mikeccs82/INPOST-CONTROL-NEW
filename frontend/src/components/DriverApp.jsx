@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Toaster, toast } from "sonner";
-import { LogOut, Truck, ArrowLeft, PackageCheck, Loader2, ArrowRight } from "lucide-react";
+import { LogOut, Truck, ArrowLeft, PackageCheck, Loader2, ArrowRight, Wand2, RotateCcw, Warehouse } from "lucide-react";
 import { MapView } from "./MapView";
 import { StopList } from "./StopList";
 import { DriverDashboard } from "./DriverDashboard";
@@ -11,7 +11,7 @@ import { CargaOrden } from "./CargaOrden";
 import { CargaLista } from "./CargaLista";
 import { RepartoView } from "./RepartoView";
 import { DayBar } from "./DayBar";
-import { myRouteConfig, saveDriverRouteOrder, computeRoute } from "../lib/api";
+import { myRouteConfig, saveDriverRouteOrder, computeRoute, buildMyRoute, repeatLastSacas } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
 
@@ -70,6 +70,31 @@ export const DriverApp = ({ user, onLogout }) => {
     try { await saveDriverRouteOrder(next); } catch (e) { toast.error("No se pudo guardar el orden"); }
   };
 
+  const [building, setBuilding] = useState(false);
+  const optimize = async () => {
+    if (!rEditable) { toast.error("Los días anteriores son solo lectura"); return; }
+    setBuilding(true);
+    try {
+      await buildMyRoute();
+      await load();
+      toast.success("Ruta optimizada");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo optimizar. ¿Ordenaste sacas?");
+    } finally { setBuilding(false); }
+  };
+  const repeatLast = async () => {
+    if (!rEditable) { toast.error("Los días anteriores son solo lectura"); return; }
+    setBuilding(true);
+    try {
+      const r = await repeatLastSacas();
+      await buildMyRoute();
+      await load();
+      toast.success(`Repetido el último día: ${r.count} paradas`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo repetir el último día");
+    } finally { setBuilding(false); }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Toaster theme="dark" position="top-center" richColors />
@@ -121,11 +146,23 @@ export const DriverApp = ({ user, onLogout }) => {
             <PackageCheck size={15} className="text-[#F26A21]" />
             <span className="text-xs text-slate-300">{stops.length} paradas ordenadas</span>
             {summary && <span className="text-[11px] font-mono-tech text-slate-300">{fmtDistance(summary.distance)} · {fmtDuration(summary.duration)}</span>}
-            {driverRoute && rEditable && (
-              <button data-testid="route-next-step" onClick={() => setScreen("carga")}
-                className="ml-auto flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-colors">
-                Siguiente <ArrowRight size={14} />
-              </button>
+            {rEditable && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <button data-testid="route-repeat-last" onClick={repeatLast} disabled={building}
+                  className="flex items-center gap-1.5 bg-slate-800 border border-slate-600 hover:border-[#F26A21] text-white text-xs font-bold px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50">
+                  <RotateCcw size={13} /> Repetir último día
+                </button>
+                <button data-testid="route-optimize" onClick={optimize} disabled={building}
+                  className="flex items-center gap-1.5 bg-[#1E5AA8] hover:bg-[#184a8c] text-white text-xs font-bold px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50">
+                  {building ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} Optimizar
+                </button>
+                {driverRoute && (
+                  <button data-testid="route-next-step" onClick={() => setScreen("carga")}
+                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-colors">
+                    Siguiente <ArrowRight size={14} />
+                  </button>
+                )}
+              </div>
             )}
           </div>
           {!rEditable && (
@@ -142,8 +179,20 @@ export const DriverApp = ({ user, onLogout }) => {
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6 bg-slate-950">
               <PackageCheck size={40} className="text-slate-600 mb-3" />
               <p className="text-slate-300 font-semibold mb-1">Aún no has preparado la ruta</p>
-              <p className="text-slate-500 text-sm mb-4">Ve a "Ordenar Sacas", registra las paradas que te salieron y pulsa "Siguiente paso" para generar tu ruta optimizada.</p>
-              <button data-testid="go-sacas-btn" onClick={() => setScreen("sacas")} className="bg-[#F26A21] hover:bg-[#f58220] text-white font-bold px-5 py-2.5 rounded-lg transition-colors">Ir a Ordenar Sacas</button>
+              <p className="text-slate-500 text-sm mb-4">Ordena las sacas y pulsa <b>Optimizar</b>, o trae las paradas de ayer con <b>Repetir último día</b>.</p>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <button data-testid="go-sacas-btn" onClick={() => setScreen("sacas")} className="bg-[#F26A21] hover:bg-[#f58220] text-white font-bold px-5 py-2.5 rounded-lg transition-colors">Ir a Ordenar Sacas</button>
+                {rEditable && (
+                  <>
+                    <button data-testid="empty-optimize" onClick={optimize} disabled={building} className="flex items-center gap-1.5 bg-[#1E5AA8] hover:bg-[#184a8c] text-white font-bold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50">
+                      {building ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />} Optimizar
+                    </button>
+                    <button data-testid="empty-repeat-last" onClick={repeatLast} disabled={building} className="flex items-center gap-1.5 bg-slate-800 border border-slate-600 hover:border-[#F26A21] text-white font-bold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50">
+                      <RotateCcw size={15} /> Repetir último día
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col md:flex-row min-h-0">
@@ -151,7 +200,25 @@ export const DriverApp = ({ user, onLogout }) => {
                 <MapView stops={stops} geometry={geometry} legs={legs} start={driverRoute?.start || null} end={driverRoute?.end || null} selectedId={selectedId} onSelect={setSelectedId} />
               </div>
               <div className="flex-1 md:flex-none md:w-[380px] overflow-y-auto thin-scroll p-3 bg-slate-900 border-t md:border-t-0 md:border-r border-slate-700 order-2 md:order-1 min-h-0">
+                {driverRoute?.start && (
+                  <div data-testid="route-nave-start" className="mb-2 flex items-center gap-2.5 rounded-md bg-emerald-600/10 border border-emerald-500/40 px-3 py-2">
+                    <div className="w-7 h-7 rounded-md bg-emerald-600 flex items-center justify-center shrink-0"><Warehouse size={15} className="text-white" /></div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Salida · Nave</div>
+                      <div className="text-xs text-white truncate">{driverRoute.start.address || driverRoute.start.name}</div>
+                    </div>
+                  </div>
+                )}
                 <StopList stops={stops} onReorder={reorder} onRemove={() => {}} selectedId={selectedId} onSelect={setSelectedId} onChangeType={() => {}} schedule={{}} onChangeWindow={() => {}} readOnlyMeta={true} />
+                {(driverRoute?.round_trip || driverRoute?.end) && (
+                  <div data-testid="route-nave-end" className="mt-1 flex items-center gap-2.5 rounded-md bg-sky-600/10 border border-sky-500/40 px-3 py-2">
+                    <div className="w-7 h-7 rounded-md bg-sky-600 flex items-center justify-center shrink-0"><Warehouse size={15} className="text-white" /></div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Retorno · Nave</div>
+                      <div className="text-xs text-white truncate">{(driverRoute.end || driverRoute.start)?.address || (driverRoute.end || driverRoute.start)?.name}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
