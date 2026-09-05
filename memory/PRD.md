@@ -105,3 +105,8 @@
 - CargaVehiculo: botón "Siguiente" (carga-next-step) -> screen 'carga-orden'.
 - Nuevo CargaOrden.jsx (screen 'carga-orden'): animación de cajas que se cargan de la ÚLTIMA parada (n) a la PRIMERA (1), con la parada 1 "A MANO" junto a la puerta trasera y la zona de recogidas reservada al frente. count = nº paradas del driver_route (cap 6). Mensaje explicativo.
 - PENDIENTE usuario: redeploy para emergent.host.
+
+## Animaciones Carga mejoradas (realistas) (2026-06-05)
+- CargaVehiculo.jsx rediseñado: SVG con gradientes (carrocería/cabina/cristal), sombra, faro con glow, luz trasera, ruedas con llanta+radios girando, carretera con profundidad, líneas de velocidad y humo. Zona de recogidas pulsante con cajas 3D y flecha.
+- CargaOrden.jsx rediseñado: interior claro con suelo de listones, cajas pseudo-3D (cara superior/lateral, nº, cinta) cargándose de la última a la primera, caja 1 naranja con glow + "A MANO" junto a puerta trasera, zona recogidas al frente con "recogidas" minúscula vertical.
+- PENDIENTE usuario: redeploy para emergent.host.
