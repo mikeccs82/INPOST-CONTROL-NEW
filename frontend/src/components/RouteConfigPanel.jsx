@@ -21,19 +21,32 @@ const Field = ({ label, children }) => (
 );
 const inputCls = "w-full bg-slate-900 border border-slate-700 text-white rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]";
 
-const RouteForm = ({ drivers, values, setValues, takenIds = [], currentDriverId = null }) => (
+const RouteForm = ({ drivers, values, setValues, takenIds = [], currentDriverIds = [] }) => {
+  const selected = values.driver_ids || [];
+  const toggle = (id) => {
+    const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
+    setValues({ ...values, driver_ids: next });
+  };
+  return (
   <div className="space-y-3">
     <Field label="Número / Nombre de ruta">
       <input data-testid="rc-number" className={inputCls} value={values.number} onChange={(e) => setValues({ ...values, number: e.target.value })} placeholder="Ej. 8002" />
     </Field>
-    <Field label="Conductor">
-      <select data-testid="rc-driver" className={inputCls} value={values.driver_id || ""} onChange={(e) => setValues({ ...values, driver_id: e.target.value })}>
-        <option value="">— Sin asignar —</option>
+    <Field label="Conductores (uno o varios)">
+      <div data-testid="rc-drivers" className="max-h-44 overflow-y-auto thin-scroll rounded-md border border-slate-600 bg-slate-900 divide-y divide-slate-800">
+        {drivers.length === 0 && <div className="px-3 py-2 text-sm text-slate-500">No hay conductores</div>}
         {drivers.map((d) => {
-          const taken = takenIds.includes(d.id) && d.id !== currentDriverId;
-          return <option key={d.id} value={d.id} disabled={taken}>{d.nombres} {d.apellidos} ({d.username}){taken ? " — ya tiene ruta" : ""}</option>;
+          const taken = takenIds.includes(d.id) && !currentDriverIds.includes(d.id);
+          const checked = selected.includes(d.id);
+          return (
+            <label key={d.id} className={`flex items-center gap-2.5 px-3 py-2 text-sm ${taken ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-slate-800"}`}>
+              <input type="checkbox" checked={checked} disabled={taken} onChange={() => toggle(d.id)} className="w-4 h-4 accent-[#F26A21]" />
+              <span className="text-white">{d.nombres} {d.apellidos} <span className="text-slate-500 font-mono-tech">({d.username})</span></span>
+              {taken && <span className="ml-auto text-[10px] uppercase text-amber-400">ya tiene ruta</span>}
+            </label>
+          );
         })}
-      </select>
+      </div>
     </Field>
     <div className="grid grid-cols-3 gap-3">
       <Field label="Hora de carga">
@@ -47,7 +60,8 @@ const RouteForm = ({ drivers, values, setValues, takenIds = [], currentDriverId 
       </Field>
     </div>
   </div>
-);
+  );
+};
 
 const Modal = ({ children, onClose, testid, wide }) => (
   <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
@@ -84,7 +98,7 @@ const StopsViewer = ({ route, onClose }) => (
 
 const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
   const [route, setRoute] = useState(null);
-  const [values, setValues] = useState({ number: "", driver_id: "", load_time: "", dock: null, departure_time: "" });
+  const [values, setValues] = useState({ number: "", driver_ids: [], load_time: "", dock: null, departure_time: "" });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewStops, setViewStops] = useState(false);
@@ -92,7 +106,7 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
   const refresh = useCallback(async () => {
     const r = await getRouteConfig(id);
     setRoute(r);
-    setValues({ number: r.number || "", driver_id: r.driver_id || "", load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
+    setValues({ number: r.number || "", driver_ids: r.driver_ids || (r.driver_id ? [r.driver_id] : []), load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
   }, [id]);
 
   useEffect(() => { refresh().catch(() => toast.error("No se pudo cargar la ruta")); }, [refresh]);
@@ -130,7 +144,7 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
           <button data-testid="rc-detail-close" onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
         <div className="p-4 space-y-4">
-          <RouteForm drivers={drivers} values={values} setValues={setValues} takenIds={takenIds} currentDriverId={route.driver_id} />
+          <RouteForm drivers={drivers} values={values} setValues={setValues} takenIds={takenIds} currentDriverIds={route.driver_ids || (route.driver_id ? [route.driver_id] : [])} />
 
           <div className="flex items-center justify-between rounded-md bg-slate-900 border border-slate-700 px-3 py-2">
             <span className="text-sm text-slate-300 flex items-center gap-2"><MapPin size={15} className="text-[#F26A21]" /> {route.stops_count || 0} paradas</span>
@@ -173,7 +187,7 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
 };
 
 const NewModal = ({ drivers, takenIds, onClose, onCreated }) => {
-  const [values, setValues] = useState({ number: "", driver_id: "", load_time: "", dock: null, departure_time: "" });
+  const [values, setValues] = useState({ number: "", driver_ids: [], load_time: "", dock: null, departure_time: "" });
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -223,7 +237,7 @@ const Card = ({ r, onClick }) => (
       <div className="min-w-0">
         <div className="text-base font-bold text-white truncate">Ruta {r.number || "—"}</div>
         <div className="text-xs text-slate-400 flex items-center gap-1 truncate">
-          <User size={12} /> {r.driver ? `${r.driver.nombres} ${r.driver.apellidos}`.trim() || r.driver.username : "Sin asignar"}
+          <User size={12} /> {(r.drivers && r.drivers.length) ? r.drivers.map((d) => (`${d.nombres} ${d.apellidos}`.trim() || d.username)).join(", ") : "Sin asignar"}
         </div>
       </div>
     </div>
@@ -247,7 +261,7 @@ export const RouteConfigPanel = () => {
   const [loading, setLoading] = useState(true);
   const [newOpen, setNewOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
-  const takenIds = items.filter((r) => r.driver_id).map((r) => r.driver_id);
+  const takenIds = items.flatMap((r) => r.driver_ids || (r.driver_id ? [r.driver_id] : []));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -262,7 +276,7 @@ export const RouteConfigPanel = () => {
     <div data-testid="route-config-panel" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">Configuración de rutas</h1>
-        <p className="text-sm text-slate-400 mb-4">{items.length} ruta(s) · una por conductor</p>
+        <p className="text-sm text-slate-400 mb-4">{items.length} ruta(s) · uno o varios conductores por ruta</p>
 
         {loading ? (
           <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#F26A21]" /></div>

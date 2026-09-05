@@ -159,7 +159,11 @@
 - Datos de prueba sembrados (scripts/seed_past_days.py) para el conductor 1122: 2 días anteriores que salieron a ruta — 2026-09-03 (completo) y 2026-09-04 (con incidencias: vuelvo, cerrado definitivo, y una entrega con problema).
 - Verificado por curl (editable/dates por fecha) y capturas (los 3 pasos en día pasado, solo lectura).
 
-## Usuarios admin adicionales + ubicación GPS del conductor (2026-06-09)
+## Ruta compartida por varios conductores (opción A) (2026-06-09)
+- route_configs ahora admite `driver_ids` (lista) además de `driver_id` (legacy). Helper _mine(user) busca la ruta por driver_id OR driver_ids. 8 lookups "my route" migrados.
+- create/update_route_config: valida cada conductor (rol driver, no asignado a otra ruta) y guarda driver_ids (+ driver_id=primero para compat). _enrich_config devuelve `drivers` (lista) y `driver` (primero). list_route_configs junta ids de driver_ids.
+- Progreso independiente: sacas/route/carga/reparto ya están keyed por driver_id, así que cada conductor tiene su avance. Fallback de driver_route en route_config solo se usa si len(driver_ids)<=1 (evita fuga entre conductores).
+- Frontend RouteConfigPanel: RouteForm con multiselección de conductores (checkboxes), takenIds = todos los driver_ids, Card muestra lista de conductores. Verificado API (2 conductores misma ruta, progreso separado) + UI.
 - Alta de usuarios (UsersDialog): checkbox "Es administrador". Backend UserCreate.is_admin -> role "admin"|"driver". Al marcarlo se ocultan datos de furgón. GET /users ahora devuelve todos (drivers+admins); RouteConfigPanel filtra role!=='admin' para el desplegable de conductores. update/delete_user por id (protegido: no se puede borrar el ADMIN_USERNAME principal). Verificado: crear admin/driver, login del nuevo admin, listar usuarios.
 - Ubicación GPS: al pulsar "Ya estoy en el sitio" (tarjeta actual o lista) se captura navigator.geolocation y se envía a POST /api/my/location -> colección `driver_locations` {driver_id, driver_username, date, stop_id, stop_name, route_number, lat, lon, accuracy, created_at}. Solo en día editable. Verificado por curl (registro guardado).
 - App reiniciada a cero: solo queda el admin principal (5708699). seed_data.json vaciado para que producción también arranque limpia; seed inicial idempotente por bandera seed_flags.
