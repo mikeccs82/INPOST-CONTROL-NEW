@@ -103,6 +103,12 @@ export const deleteJournalEntry = async (id) => (await client.delete(`/route-jou
 export const loadAllJournal = async (date) => (await client.post("/route-journal/load-all", null, { params: date ? { date } : {} })).data;
 export const routeStatus = async (date) => (await client.get("/route-status", { params: date ? { date } : {} })).data;
 export const listDelegaciones = async () => (await client.get("/delegaciones")).data;
+export const createNotification = async (body) => (await client.post("/my/notifications", body)).data;
+export const listNotifications = async () => (await client.get("/notifications")).data;
+export const notificationsUnread = async () => (await client.get("/notifications/unread-count")).data;
+export const markNotificationsRead = async () => (await client.post("/notifications/mark-read")).data;
+export const resolveNotification = async (id) => (await client.put(`/notifications/${id}/resolve`)).data;
+export const addSingleStop = async (cid, body) => (await client.post(`/route-configs/${cid}/add-stop`, body)).data;
 
 // ---- Route Configs (Configuración de rutas) ----
 export const listRouteConfigs = async () => (await client.get("/route-configs")).data;

@@ -6,10 +6,11 @@ import { AdminDashboard } from "./AdminDashboard";
 import { RouteConfigPanel } from "./RouteConfigPanel";
 import { DiarioRuta } from "./DiarioRuta";
 import { EstadoRutas } from "./EstadoRutas";
+import { Notificaciones } from "./Notificaciones";
 import { UsersDialog } from "./UsersDialog";
 import "../App.css";
 
-const TITLES = { configs: "Configuración de rutas", diario: "Asignación de Ruta", estado: "Estado rutas" };
+const TITLES = { configs: "Configuración de rutas", diario: "Asignación de Ruta", estado: "Estado rutas", notificaciones: "Notificaciones" };
 
 export const AdminApp = ({ user, onLogout }) => {
   const [screen, setScreen] = useState("dashboard");
@@ -53,6 +54,7 @@ export const AdminApp = ({ user, onLogout }) => {
       {screen === "configs" && <RouteConfigPanel />}
       {screen === "diario" && <DiarioRuta />}
       {screen === "estado" && <EstadoRutas />}
+      {screen === "notificaciones" && <Notificaciones />}
 
       <UsersDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
     </div>

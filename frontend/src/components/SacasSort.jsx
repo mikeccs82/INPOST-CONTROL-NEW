@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight, CalendarDays, Lock, Info, ChevronDown, ChevronUp, Minus, Plus, Trash2 } from "lucide-react";
-import { mySacas, saveMySacas, buildMyRoute } from "../lib/api";
+import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight, CalendarDays, Lock, Info, ChevronDown, ChevronUp, Minus, Plus, Trash2, Bell } from "lucide-react";
+import { mySacas, saveMySacas, buildMyRoute, createNotification } from "../lib/api";
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
 const last4 = (s) => digits(s).slice(-4);
@@ -191,6 +191,24 @@ export const SacasSort = ({ onNext }) => {
       .filter((i) => i.sacas > 0);
     setIsolated(nextIso);
     persist(posRef.current, nextIso);
+  };
+
+  const [isoConfirm, setIsoConfirm] = useState(null); // {last4, step:'confirm'|'notify'}
+  const [notifying, setNotifying] = useState(false);
+  const notifySupervisor = async () => {
+    if (!isoConfirm) return;
+    const item = isolated.find((i) => i.last4 === isoConfirm.last4);
+    setNotifying(true);
+    try {
+      await createNotification({ type: "parada_no_registrada", last4: isoConfirm.last4, sacas: item?.sacas || 0, bultos: item?.bultos || 0 });
+      const nextIso = isolated.map((i) => i.last4 === isoConfirm.last4 ? { ...i, notified: true } : i);
+      setIsolated(nextIso);
+      persist(posRef.current, nextIso);
+      toast.success("Supervisor notificado. Parada pendiente de agregar.");
+      setIsoConfirm(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "No se pudo notificar");
+    } finally { setNotifying(false); }
   };
 
   const totalSacas = positions.reduce((a, p) => a + p.sacas, 0) + isolated.reduce((a, i) => a + i.sacas, 0);
@@ -419,17 +437,27 @@ export const SacasSort = ({ onNext }) => {
             <h2 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 mb-2"><AlertTriangle size={15} /> Aisladas / no reconocidas</h2>
             <div className="space-y-2">
               {isolated.map((i) => (
-                <div key={i.last4} data-testid={`sacas-iso-${i.last4}`} className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-3 flex items-center justify-between">
+                <div key={i.last4} data-testid={`sacas-iso-${i.last4}`} className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-3 flex items-center justify-between gap-2">
                   <span className="font-mono-tech text-white">···{i.last4}</span>
-                  {editable ? (
-                    <div className="flex items-center gap-1">
-                      <button data-testid={`sacas-iso-minus-${i.last4}`} onClick={() => adjustIso(i.last4, -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Minus size={13} /></button>
-                      <span className="w-8 text-center text-xs text-amber-300 font-mono-tech">{i.sacas}</span>
-                      <button data-testid={`sacas-iso-plus-${i.last4}`} onClick={() => adjustIso(i.last4, 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Plus size={13} /></button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-amber-300">{i.sacas} saca(s)</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {editable ? (
+                      <div className="flex items-center gap-1">
+                        <button data-testid={`sacas-iso-minus-${i.last4}`} onClick={() => adjustIso(i.last4, -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Minus size={13} /></button>
+                        <span className="w-8 text-center text-xs text-amber-300 font-mono-tech">{i.sacas}</span>
+                        <button data-testid={`sacas-iso-plus-${i.last4}`} onClick={() => adjustIso(i.last4, 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Plus size={13} /></button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-300">{i.sacas} saca(s)</span>
+                    )}
+                    {i.notified ? (
+                      <span data-testid={`sacas-iso-notified-${i.last4}`} className="text-[10px] font-bold uppercase text-emerald-400 flex items-center gap-1"><Bell size={11} /> Notificada</span>
+                    ) : editable ? (
+                      <button data-testid={`sacas-iso-notify-${i.last4}`} onClick={() => setIsoConfirm({ last4: i.last4, step: "confirm" })}
+                        className="text-[11px] font-bold bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors">
+                        <Bell size={12} /> Es de mi ruta
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
@@ -443,6 +471,37 @@ export const SacasSort = ({ onNext }) => {
           </div>
         )}
       </div>
+
+      {isoConfirm && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setIsoConfirm(null)}>
+          <div data-testid="iso-modal" className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {isoConfirm.step === "confirm" ? (
+              <div className="p-5 text-center">
+                <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center mx-auto mb-3"><AlertTriangle size={22} className="text-amber-400" /></div>
+                <div className="text-sm font-mono-tech text-slate-400 mb-1">···{isoConfirm.last4}</div>
+                <p className="text-lg font-bold text-white mb-1">¿Estás seguro que es de tu ruta?</p>
+                <p className="text-sm text-slate-400 mb-4">Esta parada no está registrada en tu Excel.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button data-testid="iso-no" onClick={() => setIsoConfirm(null)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-lg transition-colors">No</button>
+                  <button data-testid="iso-yes" onClick={() => setIsoConfirm({ ...isoConfirm, step: "notify" })} className="bg-[#F26A21] hover:bg-[#f58220] text-white font-bold py-2.5 rounded-lg transition-colors">Sí, es de mi ruta</button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 text-center">
+                <div className="w-12 h-12 rounded-full bg-[#1E5AA8]/15 border border-[#1E5AA8]/40 flex items-center justify-center mx-auto mb-3"><Bell size={22} className="text-[#4c8ce0]" /></div>
+                <p className="text-lg font-bold text-white mb-1">Notificar al supervisor</p>
+                <p className="text-sm text-slate-400 mb-4">Se notificará al supervisor que esta parada (···{isoConfirm.last4}) está <b className="text-white">pendiente de agregar</b> a tu ruta.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button data-testid="iso-cancel" onClick={() => setIsoConfirm(null)} disabled={notifying} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50">Cancelar</button>
+                  <button data-testid="iso-notify" onClick={notifySupervisor} disabled={notifying} className="bg-[#1E5AA8] hover:bg-[#184a8c] text-white font-bold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                    {notifying ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />} Notificar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

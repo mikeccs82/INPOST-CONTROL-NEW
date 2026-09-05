@@ -226,3 +226,10 @@
 
 ## Corregir sacas en Paso 1 (2026-09-05)
 - SacasSort: cada posición muestra controles −/+ para SACAS y para BULTOS, y botón "Eliminar" (elimina la posición y renumera 1..n). Las aisladas tienen −/+ (se borran al llegar a 0). Solo cuando editable (hoy asignado); en históricos sigue solo lectura. Cada cambio persiste vía saveMySacas. Verificado en UI (3→2 sacas, eliminar posición renumera, persiste en DB).
+
+## Notificaciones conductor -> supervisor (2026-09-05)
+- Conductor (SacasSort, aisladas): botón "Es de mi ruta" -> modal "¿Estás seguro que es de tu ruta?" (Sí/No) -> modal "Notificar al supervisor (pendiente de agregar)" -> POST /api/my/notifications {type:"parada_no_registrada", last4, sacas, bultos}. La aislada queda marcada "Notificada". Resuelve la ruta por _my_config (route_journal de hoy).
+- Colección `notifications`: {id,type,route_config_id,route_number,delegacion,driver_id,driver_name,last4,sacas,bultos,status:unread|read|resolved,date,created_at}.
+- Admin: nueva sección "Notificaciones" (card con GLOBO rojo de no leídas, poll 20s vía GET /notifications/unread-count). Al abrir marca todas como leídas (POST /notifications/mark-read). Tabla: Ruta, Tipo de notificación, Conductor, Estado, Corregir.
+- "Corregir" (parada_no_registrada) -> confirm "¿Desea registrar una nueva parada?" -> formulario de 1 parada (nombre, dirección, order_id prefijado con last4, tipo, ventanas) -> POST /route-configs/{cid}/add-stop (geocodifica si falta coord y añade al Excel/stops guardado) -> PUT /notifications/{id}/resolve. Endpoints: GET /notifications, GET /notifications/unread-count, POST /notifications/mark-read, PUT /notifications/{id}/resolve, POST /route-configs/{cid}/add-stop.
+- Verificado por curl (crear notif, unread=1, add-stop geocodifica 36->37, resolve) y UI (badge 1, tabla, ambos modales conductor y modal admin).

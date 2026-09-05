@@ -1904,6 +1904,112 @@ async def route_status(date: Optional[str] = None, admin=Depends(require_admin))
     return {"date": d, "today": _today(), "rows": rows, "dates": all_dates}
 
 
+class NotificationCreate(BaseModel):
+    type: str = "parada_no_registrada"
+    last4: Optional[str] = None
+    sacas: int = 0
+    bultos: int = 0
+    note: Optional[str] = None
+
+
+class AddStopBody(BaseModel):
+    name: str = ""
+    address: str = ""
+    order_id: Optional[str] = None
+    window_from: Optional[str] = None
+    window_to: Optional[str] = None
+    stop_type: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+
+NOTIF_LABELS = {"parada_no_registrada": "Parada no registrada"}
+
+
+@api_router.post("/my/notifications")
+async def create_notification(body: NotificationCreate, user=Depends(get_current_user)):
+    rc = await _my_config(user, _today())
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "type": body.type,
+        "route_config_id": rc["id"],
+        "route_number": rc.get("number") or "",
+        "delegacion": rc.get("delegacion"),
+        "driver_id": user["id"],
+        "driver_name": f"{user.get('nombres','')} {user.get('apellidos','')}".strip() or user.get("username"),
+        "last4": body.last4,
+        "sacas": body.sacas,
+        "bultos": body.bultos,
+        "note": body.note,
+        "status": "unread",
+        "date": _today(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "notification": doc}
+
+
+@api_router.get("/notifications")
+async def list_notifications(admin=Depends(require_admin)):
+    docs = await db.notifications.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in docs:
+        d["type_label"] = NOTIF_LABELS.get(d.get("type"), d.get("type"))
+    unread = sum(1 for d in docs if d.get("status") == "unread")
+    return {"notifications": docs, "unread": unread}
+
+
+@api_router.get("/notifications/unread-count")
+async def notifications_unread(admin=Depends(require_admin)):
+    n = await db.notifications.count_documents({"status": "unread"})
+    return {"unread": n}
+
+
+@api_router.post("/notifications/mark-read")
+async def notifications_mark_read(admin=Depends(require_admin)):
+    await db.notifications.update_many({"status": "unread"}, {"$set": {"status": "read"}})
+    return {"ok": True}
+
+
+@api_router.put("/notifications/{nid}/resolve")
+async def resolve_notification(nid: str, admin=Depends(require_admin)):
+    r = await db.notifications.update_one({"id": nid}, {"$set": {"status": "resolved", "resolved_at": datetime.now(timezone.utc).isoformat()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Notificación no encontrada")
+    return {"ok": True}
+
+
+@api_router.post("/route-configs/{cid}/add-stop")
+async def add_single_stop(cid: str, body: AddStopBody, admin=Depends(require_admin)):
+    rc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
+    if not rc:
+        raise HTTPException(404, "Ruta no encontrada")
+    lat, lon = body.lat, body.lon
+    if (lat is None or lon is None) and body.address:
+        cands = await _geocode_candidates(body.address)
+        if cands:
+            lat, lon = cands[0]["lat"], cands[0]["lon"]
+    if lat is None or lon is None:
+        raise HTTPException(400, "No se pudo geolocalizar. Indica dirección válida o coordenadas.")
+    stop = {
+        "id": str(uuid.uuid4()),
+        "name": body.name or "",
+        "address": body.address or "",
+        "order_id": body.order_id,
+        "window_from": body.window_from,
+        "window_to": body.window_to,
+        "notes": None, "phone": None, "email": None,
+        "stop_type": body.stop_type if body.stop_type in ("P", "PD", "L", "L24") else None,
+        "lat": float(lat), "lon": float(lon),
+    }
+    stops = rc.get("stops", []) + [stop]
+    await db.route_configs.update_one({"id": cid}, {"$set": {"stops": stops, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True, "stop": stop, "stops_count": len(stops)}
+
+
+
 
 @api_router.post("/route-configs/{cid}/simulation")
 async def save_simulation(cid: str, body: SimulationBody, admin=Depends(require_admin)):
