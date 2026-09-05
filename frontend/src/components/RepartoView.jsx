@@ -156,10 +156,12 @@ export const RepartoView = () => {
                     {curP.pickedUp ? `Recogido ✓ (${curP.pickupSacas})` : "Recoger"}
                   </button>
                 </div>
-                <button data-testid="reparto-incidencia" onClick={() => setIncModal(true)}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-600/90 hover:bg-amber-600 text-white font-bold py-3 rounded-xl transition-colors">
-                  <AlertTriangle size={18} /> Incidencia
-                </button>
+                {!(curP.delivered && curP.pickedUp) && (
+                  <button data-testid="reparto-incidencia" onClick={() => setIncModal(true)}
+                    className="w-full flex items-center justify-center gap-2 bg-amber-600/90 hover:bg-amber-600 text-white font-bold py-3 rounded-xl transition-colors">
+                    <AlertTriangle size={18} /> Incidencia
+                  </button>
+                )}
                 <button data-testid="reparto-next-stop" onClick={onNextStop}
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-3 rounded-xl transition-colors">
                   {idx + 1 >= stops.length ? "Finalizar ruta" : "Siguiente parada"} <ArrowRight size={18} />
