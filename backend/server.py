@@ -904,6 +904,7 @@ class UserCreate(BaseModel):
     username: str
     password: str
     is_admin: bool = False
+    baja: bool = False
     nombres: str = ""
     apellidos: str = ""
     dni: str = ""
@@ -920,6 +921,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     password: Optional[str] = None
+    baja: Optional[bool] = None
     nombres: Optional[str] = None
     apellidos: Optional[str] = None
     dni: Optional[str] = None
@@ -974,6 +976,7 @@ class LocationBody(BaseModel):
 
 class RouteConfigBody(BaseModel):
     number: str = ""
+    activa: bool = True
     driver_id: Optional[str] = None
     driver_ids: List[str] = []
     load_time: str = ""
@@ -1053,6 +1056,50 @@ def _mine(user):
     return {"$or": [{"driver_id": uid}, {"driver_ids": uid}]}
 
 
+async def _editable(uid, d):
+    """Un conductor solo puede operar (editar) HOY si tiene ruta asignada en el Diario de hoy."""
+    if d != _today():
+        return False
+    return bool(await db.route_journal.find_one({"date": d, "driver_id": uid}))
+
+
+def _prev_working_day(d):
+    dt = datetime.strptime(d, "%Y-%m-%d")
+    delta = 3 if dt.weekday() == 0 else 1  # lunes -> viernes
+    return (dt - timedelta(days=delta)).strftime("%Y-%m-%d")
+
+
+async def _build_day_entries(d, existing_pairs):
+    """Genera entradas del diario para el día d copiando la asignación del día anterior
+    (o del viernes si es lunes); si no hay, usa los conductores de la config. Solo rutas activas."""
+    prev = _prev_working_day(d)
+    prev_entries = await db.route_journal.find({"date": prev}, {"_id": 0}).to_list(1000)
+    prev_by_cfg = {}
+    for e in prev_entries:
+        prev_by_cfg.setdefault(e.get("route_config_id"), []).append(e.get("driver_id"))
+    configs = await db.route_configs.find({"activa": {"$ne": False}}, {"_id": 0}).sort("number", 1).to_list(1000)
+    out = []
+    for c in configs:
+        cid = c.get("id")
+        if cid in prev_by_cfg:
+            drivers = prev_by_cfg[cid]
+        else:
+            drivers = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
+        if not drivers:
+            drivers = [None]
+        for did in drivers:
+            if (cid, did) in existing_pairs:
+                continue
+            existing_pairs.add((cid, did))
+            out.append({
+                "id": str(uuid.uuid4()), "date": d, "route_config_id": cid,
+                "route_number": c.get("number", ""), "load_time": c.get("load_time", ""),
+                "dock": c.get("dock"), "driver_id": did,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+    return out
+
+
 async def _driver_days(driver_id):
     dates = set()
     for coll in (db.saca_day_sessions, db.route_day_sessions, db.carga_sessions, db.reparto_sessions):
@@ -1069,6 +1116,8 @@ async def login(body: LoginBody):
     u = await db.users.find_one({"username": body.username})
     if not u or not bcrypt.checkpw(body.password.encode(), u["password_hash"].encode()):
         raise HTTPException(401, "Usuario o contraseña incorrectos")
+    if u.get("baja"):
+        raise HTTPException(403, "Usuario dado de baja. Contacta con el administrador.")
     pub = {k: v for k, v in u.items() if k not in ("_id", "password_hash", "password_plain")}
     return {"token": create_token(u), "user": pub}
 
@@ -1199,7 +1248,7 @@ async def my_sacas(date: Optional[str] = None, user=Depends(get_current_user)):
         "stops": rc.get("stops", []) if rc else [],
         "date": d,
         "today": _today(),
-        "editable": d == _today(),
+        "editable": await _editable(user["id"], d),
         "session": session,
         "dates": date_list,
     }
@@ -1242,7 +1291,7 @@ async def my_route_config(date: Optional[str] = None, user=Depends(get_current_u
         "driver_route": driver_route,
         "date": d,
         "today": _today(),
-        "editable": d == _today(),
+        "editable": await _editable(user["id"], d),
         "dates": await _driver_days(user["id"]),
     }
 
@@ -1318,7 +1367,7 @@ async def my_carga(date: Optional[str] = None, user=Depends(get_current_user)):
     return {
         "date": d,
         "today": _today(),
-        "editable": d == _today(),
+        "editable": await _editable(user["id"], d),
         "dates": await _driver_days(user["id"]),
         "loaded_stop_ids": (doc or {}).get("loaded_stop_ids", []),
     }
@@ -1350,7 +1399,7 @@ async def my_reparto(date: Optional[str] = None, user=Depends(get_current_user))
     return {
         "date": d,
         "today": _today(),
-        "editable": d == _today(),
+        "editable": await _editable(user["id"], d),
         "dates": await _driver_days(user["id"]),
         "idx": (doc or {}).get("idx", 0),
         "stops": (doc or {}).get("stops", {}),
@@ -1553,20 +1602,9 @@ async def update_config_stops(cid: str, file: UploadFile = File(...), admin=Depe
 async def list_route_journal(date: Optional[str] = None, admin=Depends(require_admin)):
     d = date or _today()
     entries = await db.route_journal.find({"date": d}, {"_id": 0}).to_list(1000)
-    # Auto-generar el diario de HOY desde las configuraciones si aún no existe
+    # Auto-generar el diario de HOY (copiando el día anterior / viernes si es lunes) si aún no existe
     if not entries and d == _today():
-        configs = await db.route_configs.find({}, {"_id": 0}).sort("number", 1).to_list(1000)
-        new_entries = []
-        for c in configs:
-            ids = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
-            rows = ids if ids else [None]
-            for did in rows:
-                new_entries.append({
-                    "id": str(uuid.uuid4()), "date": d, "route_config_id": c.get("id"),
-                    "route_number": c.get("number", ""), "load_time": c.get("load_time", ""),
-                    "dock": c.get("dock"), "driver_id": did,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
+        new_entries = await _build_day_entries(d, set())
         if new_entries:
             await db.route_journal.insert_many([dict(e) for e in new_entries])
             entries = await db.route_journal.find({"date": d}, {"_id": 0}).to_list(1000)
@@ -1634,22 +1672,10 @@ async def load_all_route_journal(date: Optional[str] = None, admin=Depends(requi
     d = date or _today()
     existing = await db.route_journal.find({"date": d}, {"_id": 0, "route_config_id": 1, "driver_id": 1}).to_list(1000)
     seen = {(e.get("route_config_id"), e.get("driver_id")) for e in existing}
-    configs = await db.route_configs.find({}, {"_id": 0}).sort("number", 1).to_list(1000)
-    added = 0
-    for c in configs:
-        ids = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
-        rows = ids if ids else [None]
-        for did in rows:
-            if (c.get("id"), did) in seen:
-                continue
-            await db.route_journal.insert_one({
-                "id": str(uuid.uuid4()), "date": d, "route_config_id": c.get("id"),
-                "route_number": c.get("number", ""), "load_time": c.get("load_time", ""),
-                "dock": c.get("dock"), "driver_id": did,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            added += 1
-    return {"ok": True, "added": added}
+    new_entries = await _build_day_entries(d, seen)
+    if new_entries:
+        await db.route_journal.insert_many([dict(e) for e in new_entries])
+    return {"ok": True, "added": len(new_entries)}
 
 
 @api_router.post("/route-configs/{cid}/simulation")

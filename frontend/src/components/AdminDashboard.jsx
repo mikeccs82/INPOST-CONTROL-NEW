@@ -2,7 +2,7 @@ import { Route, Activity, Users, FlaskConical, LogOut, ClipboardList } from "luc
 
 const CARDS = [
   { key: "configs", label: "Configuración de rutas", icon: Route, accent: "#F26A21", soon: false },
-  { key: "diario", label: "Diario Ruta", icon: ClipboardList, accent: "#16A34A", soon: false },
+  { key: "diario", label: "Asignación de Ruta", icon: ClipboardList, accent: "#16A34A", soon: false },
   { key: "estado", label: "Estado rutas", icon: Activity, accent: "#2563EB", soon: true },
   { key: "conductores", label: "Conductores", icon: Users, accent: "#2563EB", soon: false },
   { key: "simulacion", label: "Simulación de ruta", icon: FlaskConical, accent: "#F26A21", soon: false },

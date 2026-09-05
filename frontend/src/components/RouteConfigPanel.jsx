@@ -32,6 +32,11 @@ const RouteForm = ({ drivers, values, setValues, takenIds = [], currentDriverIds
     <Field label="Número / Nombre de ruta">
       <input data-testid="rc-number" className={inputCls} value={values.number} onChange={(e) => setValues({ ...values, number: e.target.value })} placeholder="Ej. 8002" />
     </Field>
+    <label data-testid="rc-activa" className="flex items-center gap-2.5 cursor-pointer rounded-md border border-slate-600 bg-slate-900 px-3 py-2.5">
+      <input type="checkbox" checked={values.activa !== false} onChange={(e) => setValues({ ...values, activa: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+      <span className="text-sm text-white font-semibold">Activa</span>
+      <span className="text-xs text-slate-500 ml-auto">se incluye en "Cargar todas las rutas"</span>
+    </label>
     <Field label="Conductores (uno o varios)">
       <div data-testid="rc-drivers" className="max-h-44 overflow-y-auto thin-scroll rounded-md border border-slate-600 bg-slate-900 divide-y divide-slate-800">
         {drivers.length === 0 && <div className="px-3 py-2 text-sm text-slate-500">No hay conductores</div>}
@@ -98,7 +103,7 @@ const StopsViewer = ({ route, onClose }) => (
 
 const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
   const [route, setRoute] = useState(null);
-  const [values, setValues] = useState({ number: "", driver_ids: [], load_time: "", dock: null, departure_time: "" });
+  const [values, setValues] = useState({ number: "", activa: true, driver_ids: [], load_time: "", dock: null, departure_time: "" });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewStops, setViewStops] = useState(false);
@@ -106,7 +111,7 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
   const refresh = useCallback(async () => {
     const r = await getRouteConfig(id);
     setRoute(r);
-    setValues({ number: r.number || "", driver_ids: r.driver_ids || (r.driver_id ? [r.driver_id] : []), load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
+    setValues({ number: r.number || "", activa: r.activa !== false, driver_ids: r.driver_ids || (r.driver_id ? [r.driver_id] : []), load_time: r.load_time || "", dock: r.dock ?? null, departure_time: r.departure_time || "" });
   }, [id]);
 
   useEffect(() => { refresh().catch(() => toast.error("No se pudo cargar la ruta")); }, [refresh]);
@@ -187,7 +192,7 @@ const DetailModal = ({ id, drivers, takenIds, onClose, onChanged }) => {
 };
 
 const NewModal = ({ drivers, takenIds, onClose, onCreated }) => {
-  const [values, setValues] = useState({ number: "", driver_ids: [], load_time: "", dock: null, departure_time: "" });
+  const [values, setValues] = useState({ number: "", activa: true, driver_ids: [], load_time: "", dock: null, departure_time: "" });
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
 

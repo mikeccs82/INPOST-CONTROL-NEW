@@ -33,7 +33,7 @@ export const DiarioRuta = () => {
         setConfigs(cfg || []);
         setDate(j.date); setToday(j.today); setDates(j.dates || []);
       })
-      .catch(() => toast.error("No se pudo cargar el diario"))
+      .catch(() => toast.error("No se pudo cargar la asignación"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -111,7 +111,7 @@ export const DiarioRuta = () => {
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h1 className="text-xl font-bold text-white">Diario Ruta</h1>
+              <h1 className="text-xl font-bold text-white">Asignación de Ruta</h1>
               <p className="text-sm text-slate-400">{entries.length} línea(s) · hora/muelle se editan en Configuración de rutas</p>
             </div>
             {editable && (

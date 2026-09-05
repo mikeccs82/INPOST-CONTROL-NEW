@@ -8,7 +8,7 @@ import { DiarioRuta } from "./DiarioRuta";
 import { UsersDialog } from "./UsersDialog";
 import "../App.css";
 
-const TITLES = { configs: "Configuración de rutas", diario: "Diario Ruta" };
+const TITLES = { configs: "Configuración de rutas", diario: "Asignación de Ruta" };
 
 export const AdminApp = ({ user, onLogout }) => {
   const [screen, setScreen] = useState("dashboard");

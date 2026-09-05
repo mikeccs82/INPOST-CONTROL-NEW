@@ -3,7 +3,7 @@ import { X, Users, UserPlus, Trash2, Pencil, ArrowLeft, Save, MessageCircle, Shi
 import { listUsers, createUser, updateUser, removeUser } from "../lib/api";
 import { toast } from "sonner";
 
-const EMPTY = { username: "", password: "", is_admin: false, nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "" };
+const EMPTY = { username: "", password: "", is_admin: false, baja: false, nombres: "", apellidos: "", dni: "", telefono: "", marca: "", modelo: "", anio: "", matricula: "", cierre_seguridad: false, capacidad: "L3H2", tipologia: "", color: "" };
 const CAPS = ["L1H1", "L2H2", "L3H2", "L4H3"];
 const inp = "w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-[#F26A21]";
 
@@ -66,6 +66,7 @@ export const UsersDialog = ({ open, onClose }) => {
                       <div className="text-white font-semibold truncate flex items-center gap-2">
                         {d.nombres} {d.apellidos} <span className="text-slate-500 font-mono-tech text-xs">({d.username})</span>
                         {d.role === "admin" && <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase text-[#F26A21] bg-[#F26A21]/15 border border-[#F26A21]/40 px-1.5 py-0.5 rounded"><ShieldCheck size={10} /> Admin</span>}
+                        {d.baja && <span className="inline-flex items-center text-[9px] font-bold uppercase text-red-400 bg-red-500/15 border border-red-500/40 px-1.5 py-0.5 rounded">Baja</span>}
                       </div>
                       <div className="text-xs text-slate-400 truncate">{d.role === "admin" ? "Administrador" : [d.marca, d.modelo, d.anio, d.matricula, d.capacidad, d.color].filter(Boolean).join(" · ")}</div>
                     </div>
@@ -94,6 +95,11 @@ export const UsersDialog = ({ open, onClose }) => {
                 <ShieldCheck size={16} className="text-[#F26A21]" />
                 <span className="text-sm text-white font-semibold">Es administrador</span>
                 <span className="text-xs text-slate-500 ml-auto">acceso al panel de gestión</span>
+              </label>
+              <label data-testid="user-baja" className="flex items-center gap-2.5 cursor-pointer rounded-md border border-slate-700 bg-slate-900 px-3 py-2.5">
+                <input type="checkbox" checked={!!form.baja} onChange={(e) => set("baja", e.target.checked)} className="w-4 h-4 accent-red-500" />
+                <span className="text-sm text-white font-semibold">Baja</span>
+                <span className="text-xs text-slate-500 ml-auto">si está marcado, no puede entrar</span>
               </label>
               <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Datos personales</p>
               <div className="grid grid-cols-2 gap-3">
