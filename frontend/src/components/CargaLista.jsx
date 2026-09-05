@@ -71,9 +71,12 @@ export const CargaLista = ({ onFinish }) => {
     if (readOnly) return;
     setSaving(true);
     try {
-      const ordered = stops.filter((s) => loaded.has(s.id));   // solo las cargadas, en orden de reparto
+      // Cargadas = entrega (saca en furgo). No cargadas = solo recogida (no cupo por capacidad).
+      const loadedStops = stops.filter((s) => loaded.has(s.id)).map((s) => ({ ...s, pickup_only: false }));
+      const pickupStops = stops.filter((s) => !loaded.has(s.id)).map((s) => ({ ...s, pickup_only: true }));
+      const ordered = [...loadedStops, ...pickupStops];
       await saveDriverRouteOrder(ordered);
-      toast.success(`Ruta actualizada: ${ordered.length} paradas`);
+      toast.success(`Ruta actualizada: ${loadedStops.length} entrega(s) · ${pickupStops.length} solo recogida`);
       onFinish?.();
     } catch (e) { toast.error("No se pudo actualizar la ruta"); }
     finally { setSaving(false); setConfirm(false); }
@@ -179,8 +182,8 @@ export const CargaLista = ({ onFinish }) => {
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center shrink-0"><AlertTriangle size={20} className="text-amber-400" /></div>
               <div>
-                <h3 className="font-bold text-white">¿Confirmas dejar en nave?</h3>
-                <p className="text-sm text-slate-300 mt-1">Las <span className="font-bold text-white">{total - count} paradas restantes</span> se quedan en nave. La ruta se actualizará solo con las <span className="font-bold text-emerald-400">{count} ingresadas</span>.</p>
+                <h3 className="font-bold text-white">¿Confirmas capacidad completa?</h3>
+                <p className="text-sm text-slate-300 mt-1">Las <span className="font-bold text-emerald-400">{count} ingresadas</span> se reparten (entrega). Las <span className="font-bold text-white">{total - count} restantes</span> quedan como <span className="font-bold text-green-400">solo recogida</span> (se recogen si hay capacidad).</p>
               </div>
               <button onClick={() => setConfirm(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>

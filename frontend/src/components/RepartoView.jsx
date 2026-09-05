@@ -175,11 +175,12 @@ export const RepartoView = () => {
             <p className="text-slate-300 text-sm mt-1">{readOnly ? "Resumen del día (solo lectura)." : `Selecciónala${pending.length > 1 ? "s" : ""} abajo y pulsa "Ya estoy en el sitio" para completarla${pending.length > 1 ? "s" : ""}.`}</p>
           </div>
         ) : (
-          <div data-testid="reparto-current" className="rounded-2xl bg-slate-900 border border-[#F26A21]/40 p-4 mb-4">
+          <div data-testid="reparto-current" className={`rounded-2xl bg-slate-900 border p-4 mb-4 ${cur.pickup_only ? "border-green-500/50" : "border-[#F26A21]/40"}`}>
             <div className="flex items-start gap-3 mb-4">
-              <div className="w-11 h-11 rounded-xl bg-[#F26A21] flex items-center justify-center shrink-0 text-white font-extrabold text-lg">{idx + 1}</div>
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white font-extrabold text-lg ${cur.pickup_only ? "bg-green-600" : "bg-[#F26A21]"}`}>{idx + 1}</div>
               <div className="min-w-0 flex-1">
                 <div className="text-white font-bold truncate">{cur.name || `Parada ${idx + 1}`}</div>
+                {cur.pickup_only && <div className="text-[11px] font-bold uppercase text-green-400 flex items-center gap-1 mt-0.5"><PackagePlus size={12} /> Solo recogida</div>}
                 {fmtWindow(cur) && <div className="text-xs text-[#F26A21] font-semibold flex items-center gap-1 mt-0.5"><Clock size={12} className="shrink-0" /> {fmtWindow(cur)}</div>}
                 <div className="text-sm text-slate-400 truncate flex items-center gap-1 mt-0.5"><MapPin size={12} className="shrink-0" /> {cur.address || "—"}</div>
               </div>
@@ -188,7 +189,7 @@ export const RepartoView = () => {
             {!onsite && (
               <div className="space-y-2">
                 <button data-testid="reparto-ir" onClick={() => irA(cur)}
-                  className="w-full flex items-center justify-center gap-2.5 bg-[#F26A21] hover:bg-[#f58220] text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98] shadow-lg shadow-orange-900/30">
+                  className={`w-full flex items-center justify-center gap-2.5 text-white font-extrabold text-lg py-4 rounded-2xl transition-colors active:scale-[0.98] shadow-lg ${cur.pickup_only ? "bg-green-600 hover:bg-green-500 shadow-green-900/30" : "bg-[#F26A21] hover:bg-[#f58220] shadow-orange-900/30"}`}>
                   <Navigation size={24} /> Ir con Google Maps
                 </button>
                 <button data-testid="reparto-at-site" onClick={() => { setAtSite(true); captureLocation(cur.id); }}
@@ -200,18 +201,29 @@ export const RepartoView = () => {
 
             {onsite && mode === null && (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <button data-testid="reparto-entregar" onClick={() => setMode("entregar")}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-emerald-600 hover:bg-emerald-500 text-white">
-                    {curP.delivered ? <CheckCircle2 size={22} /> : <PackageOpen size={22} />}
-                    {curP.delivered ? "Entregado ✓" : "Entregar"}
-                  </button>
-                  <button data-testid="reparto-recoger" onClick={() => { setPickQty(curP.pickupSacas || 0); setMode("recoger"); }}
-                    className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-[#1E5AA8] hover:bg-[#184a8c] text-white">
-                    {curP.pickedUp ? <CheckCircle2 size={22} /> : <PackagePlus size={22} />}
-                    {curP.pickedUp ? `Recogido ✓ (${curP.pickupSacas})` : "Recoger"}
-                  </button>
-                </div>
+                {cur.pickup_only ? (
+                  <>
+                    <div className="rounded-lg bg-green-600/10 border border-green-500/30 p-2.5 text-center text-sm text-green-300 font-semibold">Punto de solo recogida (no cupo en el furgón). Recoge si tienes capacidad.</div>
+                    <button data-testid="reparto-recoger" onClick={() => { setPickQty(curP.pickupSacas || 0); setMode("recoger"); }}
+                      className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-colors bg-green-600 hover:bg-green-500 text-white">
+                      {curP.pickedUp ? <CheckCircle2 size={22} /> : <PackagePlus size={22} />}
+                      {curP.pickedUp ? `Recogido ✓ (${curP.pickupSacas})` : "Recoger"}
+                    </button>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button data-testid="reparto-entregar" onClick={() => setMode("entregar")}
+                      className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-emerald-600 hover:bg-emerald-500 text-white">
+                      {curP.delivered ? <CheckCircle2 size={22} /> : <PackageOpen size={22} />}
+                      {curP.delivered ? "Entregado ✓" : "Entregar"}
+                    </button>
+                    <button data-testid="reparto-recoger" onClick={() => { setPickQty(curP.pickupSacas || 0); setMode("recoger"); }}
+                      className="flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl font-bold transition-colors bg-[#1E5AA8] hover:bg-[#184a8c] text-white">
+                      {curP.pickedUp ? <CheckCircle2 size={22} /> : <PackagePlus size={22} />}
+                      {curP.pickedUp ? `Recogido ✓ (${curP.pickupSacas})` : "Recoger"}
+                    </button>
+                  </div>
+                )}
                 {!(curP.delivered && curP.pickedUp) && (
                   <button data-testid="reparto-incidencia" onClick={() => setIncModal(true)}
                     className="w-full flex items-center justify-center gap-2 bg-amber-600/90 hover:bg-amber-600 text-white font-bold py-3 rounded-xl transition-colors">
@@ -285,11 +297,12 @@ export const RepartoView = () => {
               <div key={s.id} className={`rounded-xl border transition-colors ${sel && !done ? "border-[#F26A21]" : isCur ? "border-[#F26A21]/40" : "border-slate-700"} ${isCur ? "bg-[#F26A21]/10" : done ? "bg-slate-900/50" : "bg-slate-900"}`}>
                 <button data-testid={`reparto-stop-${i + 1}`} onClick={() => { if (!done && !readOnly) setSelectedId(sel ? null : s.id); }}
                   className={`w-full text-left p-3 flex items-center gap-3 ${done || readOnly ? "cursor-default" : ""}`}>
-                  <div className={`shrink-0 w-9 h-9 rounded-full font-bold flex items-center justify-center ${done ? "bg-emerald-600 text-white" : isCur ? "bg-[#F26A21] text-white" : "bg-slate-800 border border-slate-600 text-white"}`}>
+                  <div className={`shrink-0 w-9 h-9 rounded-full font-bold flex items-center justify-center ${done ? "bg-emerald-600 text-white" : s.pickup_only ? "bg-green-600 text-white" : isCur ? "bg-[#F26A21] text-white" : "bg-slate-800 border border-slate-600 text-white"}`}>
                     {done ? <CheckCircle2 size={18} /> : i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm font-semibold truncate ${done ? "text-slate-400" : "text-white"}`}>{s.name || `Parada ${i + 1}`}</div>
+                    {s.pickup_only && <div className="text-[10px] font-bold uppercase text-green-400 flex items-center gap-1"><PackagePlus size={10} /> Solo recogida</div>}
                     {w && <div className="text-[11px] text-[#F26A21] font-semibold flex items-center gap-1"><Clock size={11} className="shrink-0" /> {w}</div>}
                     <div className="text-xs text-slate-500 truncate">{s.address || "—"}</div>
                   </div>

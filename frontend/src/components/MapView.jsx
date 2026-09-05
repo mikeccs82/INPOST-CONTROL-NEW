@@ -2,13 +2,15 @@ import { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 
-const makeIcon = (label, variant, selected) =>
-  L.divIcon({
+const makeIcon = (label, variant, selected) => {
+  const big = variant === "depot-marker" || variant === "end-marker";
+  return L.divIcon({
     className: "",
     html: `<div class="stop-marker ${variant || ""} ${selected ? "marker-selected" : ""}">${label}</div>`,
-    iconSize: variant ? [34, 34] : [30, 30],
-    iconAnchor: variant ? [17, 17] : [15, 15],
+    iconSize: big ? [34, 34] : [30, 30],
+    iconAnchor: big ? [17, 17] : [15, 15],
   });
+};
 
 function FitBounds({ points }) {
   const map = useMap();
@@ -98,9 +100,17 @@ export const MapView = ({ stops, geometry, legs, start, end, selectedId, onSelec
           <Marker
             key={s.id}
             position={[s.lat, s.lon]}
-            icon={makeIcon(String(i + 1), null, s.id === selectedId)}
+            icon={makeIcon(String(i + 1), s.pickup_only ? "pickup-marker" : null, s.id === selectedId)}
             eventHandlers={{ click: () => onSelect(s.id) }}
-          />
+          >
+            <Popup>
+              <div style={{ fontFamily: "IBM Plex Sans" }}>
+                <strong>{i + 1}. {s.name || "Parada"}</strong>
+                <div style={{ fontSize: 12, color: "#475569" }}>{s.address}</div>
+                {s.pickup_only && <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 700, marginTop: 2 }}>● Solo recogida</div>}
+              </div>
+            </Popup>
+          </Marker>
         ))}
 
         <FitBounds points={boundsPoints} />

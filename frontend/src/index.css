@@ -110,5 +110,10 @@ body {
     z-index: 1000;
 }
 
+.pickup-marker {
+    background: #22C55E;
+    color: #052e16;
+}
+
 .font-mono-tech { font-family: 'IBM Plex Mono', monospace; }
 .font-head { font-family: 'Chivo', sans-serif; }
