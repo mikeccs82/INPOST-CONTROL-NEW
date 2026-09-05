@@ -96,3 +96,7 @@
 - "Ordenar ruta" (Paso 2): botón "Siguiente" (route-next-step, arriba dcha) -> pantalla "Carga del vehículo" (Paso 3, screen 'carga', placeholder Próximamente). Dashboard card 'carga' también abre esta pantalla.
 - Probado por captura + curl (build optimiza desde Vilanova).
 - PENDIENTE usuario: redeploy para emergent.host.
+
+## Animación Carga del vehículo (2026-06-05)
+- Nuevo CargaVehiculo.jsx (screen 'carga'): furgoneta SVG animada (drive-in, ruedas girando, rebote, carretera en movimiento) con zona verde parpadeante + flecha en la parte delantera lateral etiquetada "Zona de recogidas". Mensaje: dejar espacio en la parte delantera lateral para las recogidas. Animaciones CSS keyframes inline.
+- PENDIENTE usuario: redeploy para emergent.host.
