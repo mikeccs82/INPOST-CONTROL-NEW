@@ -1,6 +1,6 @@
-import { Info } from "lucide-react";
+import { Info, ArrowRight } from "lucide-react";
 
-export const CargaOrden = ({ count = 6 }) => {
+export const CargaOrden = ({ count = 6, onNext }) => {
   const n = Math.max(3, Math.min(count || 6, 12));
   const ROWS = 3;
   const boxW = 30, boxH = 26, depth = 6, rowGap = 4, colGap = 12;
@@ -123,6 +123,11 @@ export const CargaOrden = ({ count = 6 }) => {
             Coloca primero, <span className="font-bold text-green-400">junto a las recogidas</span>, la <span className="font-bold text-white">última parada</span> y ve apilando encima (…5, 4). Sigue en la siguiente columna <span className="font-bold text-white">hacia la puerta</span> (3, 2, 1). Así, al abrir atrás, la <span className="font-bold text-[#F26A21]">parada 1 queda a mano</span>.
           </p>
         </div>
+
+        <button data-testid="carga-orden-next" onClick={onNext}
+          className="mt-4 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base py-3.5 rounded-xl transition-colors active:scale-[0.99]">
+          Siguiente <ArrowRight size={18} />
+        </button>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { RouteStopsView } from "./RouteStopsView";
 import { SacasSort } from "./SacasSort";
 import { CargaVehiculo } from "./CargaVehiculo";
 import { CargaOrden } from "./CargaOrden";
+import { CargaLista } from "./CargaLista";
 import { myRouteConfig, saveDriverRouteOrder, computeRoute } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 import "../App.css";
@@ -93,7 +94,9 @@ export const DriverApp = ({ user, onLogout }) => {
 
       {screen === "carga" && <CargaVehiculo onNext={() => setScreen("carga-orden")} />}
 
-      {screen === "carga-orden" && <CargaOrden count={stops.length} />}
+      {screen === "carga-orden" && <CargaOrden count={stops.length} onNext={() => setScreen("carga-lista")} />}
+
+      {screen === "carga-lista" && <CargaLista />}
 
       {screen === "paradas" && (
         <RouteStopsView stops={allStops} routeName={routeNumber ? `Ruta ${routeNumber}` : null} />

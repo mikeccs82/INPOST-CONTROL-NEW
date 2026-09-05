@@ -118,3 +118,8 @@
 
 ## Orden de carga: orden real de apilado (2026-06-05)
 - CargaOrden.jsx: se carga primero la ÚLTIMA parada junto a la zona de recogidas (frente/derecha), apilando hacia arriba, y avanzando columna a columna HACIA LA PUERTA. Ej 6 paradas: col recogidas 6(abajo),5,4 | col puerta 3,2,1. La parada 1 (naranja) queda del lado de la puerta. stop = n - j; col=floor(j/3) desde recogidas; delay j*0.4 (n primero). Mensaje/badge actualizados.
+
+## Carga al furgón (lista de ingreso) (2026-06-05)
+- CargaOrden: botón "Siguiente" (carga-orden-next) -> screen 'carga-lista'.
+- Nuevo CargaLista.jsx (screen 'carga-lista'): junta driver_route.stops (orden reparto -> nº parada = index+1) con saca_session.positions (por stop_id -> posición, sacas, bultos, order_id). Recorre de ATRÁS hacia adelante (última->primera). Tarjeta grande por parada: Parada, Posición, ID orden, Sacas, Bultos + botón grande "Ingresado al furgón" (carga-lista-ingresado) que avanza. Barra de progreso, botón Anterior, y pantalla final "¡Furgón cargado!". Solo frontend (GET my/route-config + my/sacas).
+- Verificado por captura (flujo 7 paradas driver 1122).
