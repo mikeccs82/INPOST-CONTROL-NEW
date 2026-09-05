@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight, CalendarDays, Lock, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Mic, MicOff, Search, Package, ShoppingBag, AlertTriangle, MapPin, Loader2, X, Boxes, ArrowRight, CalendarDays, Lock, Info, ChevronDown, ChevronUp, Minus, Plus, Trash2 } from "lucide-react";
 import { mySacas, saveMySacas, buildMyRoute } from "../lib/api";
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
@@ -163,6 +163,34 @@ export const SacasSort = ({ onNext }) => {
     toast.info(`Aislada: ${pending.last4} (no reconocida)`);
     setPending(null);
     setQuery("");
+  };
+
+  const adjustPos = (position, field, delta) => {
+    if (!editable) { toast.error("Los días anteriores son solo lectura"); return; }
+    const nextPos = positions.map((p) => p.position === position
+      ? { ...p, [field]: Math.max(0, (p[field] || 0) + delta) }
+      : p);
+    setPositions(nextPos);
+    persist(nextPos, isoRef.current);
+  };
+
+  const removePos = (position) => {
+    if (!editable) { toast.error("Los días anteriores son solo lectura"); return; }
+    const nextPos = positions
+      .filter((p) => p.position !== position)
+      .map((p, i) => ({ ...p, position: i + 1 }));
+    setPositions(nextPos);
+    persist(nextPos, isoRef.current);
+    toast.success("Posición eliminada");
+  };
+
+  const adjustIso = (last4, delta) => {
+    if (!editable) { toast.error("Los días anteriores son solo lectura"); return; }
+    const nextIso = isolated
+      .map((i) => i.last4 === last4 ? { ...i, sacas: Math.max(0, (i.sacas || 0) + delta) } : i)
+      .filter((i) => i.sacas > 0);
+    setIsolated(nextIso);
+    persist(posRef.current, nextIso);
   };
 
   const totalSacas = positions.reduce((a, p) => a + p.sacas, 0) + isolated.reduce((a, i) => a + i.sacas, 0);
@@ -359,10 +387,28 @@ export const SacasSort = ({ onNext }) => {
                 {addrOf(p.last4) && <div className="text-xs text-slate-300 mt-1 truncate">{addrOf(p.last4)}</div>}
                 <div className="text-[11px] text-slate-500 truncate">{p.stop_name}</div>
               </div>
-              <div className="text-sm text-slate-300 flex flex-col items-end gap-1 shrink-0">
-                <span className="flex items-center gap-1"><ShoppingBag size={14} className="text-[#F26A21]" /> {p.sacas}</span>
-                <span className="flex items-center gap-1"><Package size={14} className="text-[#1E5AA8]" /> {p.bultos}</span>
-              </div>
+              {editable ? (
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1">
+                    <ShoppingBag size={13} className="text-[#F26A21] mr-0.5" />
+                    <button data-testid={`sacas-minus-saca-${p.position}`} onClick={() => adjustPos(p.position, "sacas", -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-[#F26A21] active:scale-95"><Minus size={13} /></button>
+                    <span data-testid={`sacas-count-saca-${p.position}`} className="w-6 text-center font-mono-tech font-bold text-white">{p.sacas}</span>
+                    <button data-testid={`sacas-plus-saca-${p.position}`} onClick={() => adjustPos(p.position, "sacas", 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-[#F26A21] active:scale-95"><Plus size={13} /></button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Package size={13} className="text-[#1E5AA8] mr-0.5" />
+                    <button data-testid={`sacas-minus-bulto-${p.position}`} onClick={() => adjustPos(p.position, "bultos", -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-[#1E5AA8] active:scale-95"><Minus size={13} /></button>
+                    <span data-testid={`sacas-count-bulto-${p.position}`} className="w-6 text-center font-mono-tech font-bold text-white">{p.bultos}</span>
+                    <button data-testid={`sacas-plus-bulto-${p.position}`} onClick={() => adjustPos(p.position, "bultos", 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-[#1E5AA8] active:scale-95"><Plus size={13} /></button>
+                  </div>
+                  <button data-testid={`sacas-remove-${p.position}`} onClick={() => removePos(p.position)} className="text-[11px] text-slate-500 hover:text-red-400 flex items-center gap-1 mt-0.5"><Trash2 size={12} /> Eliminar</button>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-300 flex flex-col items-end gap-1 shrink-0">
+                  <span className="flex items-center gap-1"><ShoppingBag size={14} className="text-[#F26A21]" /> {p.sacas}</span>
+                  <span className="flex items-center gap-1"><Package size={14} className="text-[#1E5AA8]" /> {p.bultos}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -375,7 +421,15 @@ export const SacasSort = ({ onNext }) => {
               {isolated.map((i) => (
                 <div key={i.last4} data-testid={`sacas-iso-${i.last4}`} className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-3 flex items-center justify-between">
                   <span className="font-mono-tech text-white">···{i.last4}</span>
-                  <span className="text-xs text-amber-300">{i.sacas} saca(s)</span>
+                  {editable ? (
+                    <div className="flex items-center gap-1">
+                      <button data-testid={`sacas-iso-minus-${i.last4}`} onClick={() => adjustIso(i.last4, -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Minus size={13} /></button>
+                      <span className="w-8 text-center text-xs text-amber-300 font-mono-tech">{i.sacas}</span>
+                      <button data-testid={`sacas-iso-plus-${i.last4}`} onClick={() => adjustIso(i.last4, 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-600 text-white hover:border-amber-400 active:scale-95"><Plus size={13} /></button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-amber-300">{i.sacas} saca(s)</span>
+                  )}
                 </div>
               ))}
             </div>

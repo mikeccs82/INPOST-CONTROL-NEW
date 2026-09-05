@@ -223,3 +223,6 @@
 - build_my_route (conductor Optimizar/Repetir) usa _nave_for(rc.delegacion) como start + round_trip. Simulación admin (App.js chooseRouteToSim) fija warehouse.start = nave de la delegación de la ruta.
 - Datos existentes migrados: driver 1111 y admin -> delegaciones ["Barcelona"]; las 11 rutas -> delegacion "Barcelona".
 - Verificado: GET delegaciones, crear usuario sin delegación=400, build usa "Nave Barcelona" con coords correctas, UI (selector en ruta y en usuario).
+
+## Corregir sacas en Paso 1 (2026-09-05)
+- SacasSort: cada posición muestra controles −/+ para SACAS y para BULTOS, y botón "Eliminar" (elimina la posición y renumera 1..n). Las aisladas tienen −/+ (se borran al llegar a 0). Solo cuando editable (hoy asignado); en históricos sigue solo lectura. Cada cambio persiste vía saveMySacas. Verificado en UI (3→2 sacas, eliminar posición renumera, persiste en DB).
