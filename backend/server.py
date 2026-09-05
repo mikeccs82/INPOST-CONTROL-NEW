@@ -1152,13 +1152,13 @@ async def save_my_sacas(body: SacaSessionBody, user=Depends(get_current_user)):
 
 
 # ---- Route Configs (Configuración de rutas, admin) ----
-async def _enrich_config(doc):
+async def _enrich_config(doc, users_map=None):
     if not doc:
         return doc
     doc["stops_count"] = len(doc.get("stops", []))
     drv = None
     if doc.get("driver_id"):
-        u = await db.users.find_one({"id": doc["driver_id"]}, {"_id": 0, "password_hash": 0})
+        u = users_map.get(doc["driver_id"]) if users_map is not None else await db.users.find_one({"id": doc["driver_id"]}, {"_id": 0, "password_hash": 0})
         if u:
             drv = {"id": u["id"], "username": u.get("username"), "nombres": u.get("nombres", ""), "apellidos": u.get("apellidos", "")}
     doc["driver"] = drv
@@ -1168,9 +1168,14 @@ async def _enrich_config(doc):
 @api_router.get("/route-configs")
 async def list_route_configs(admin=Depends(require_admin)):
     docs = await db.route_configs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    driver_ids = list({d["driver_id"] for d in docs if d.get("driver_id")})
+    users_map = {}
+    if driver_ids:
+        rows = await db.users.find({"id": {"$in": driver_ids}}, {"_id": 0, "password_hash": 0}).to_list(1000)
+        users_map = {u["id"]: u for u in rows}
     out = []
     for d in docs:
-        d = await _enrich_config(d)
+        d = await _enrich_config(d, users_map)
         d.pop("stops", None)
         d.pop("sim_stops", None)
         out.append(d)

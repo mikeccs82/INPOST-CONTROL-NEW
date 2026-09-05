@@ -69,3 +69,8 @@
 - BUG: en 'Simulación de ruta' (App.js) la cabecera blanca con muchos botones se desbordaba en móvil y 'Salir' (logout-btn) quedaba fuera de pantalla (right~602>390). FIX: grupo derecho de botones ahora 'flex flex-wrap justify-end w-full md:w-auto' -> envuelve en filas; logout-btn dentro del viewport (right=378). Verificado testing agent iteration_8 (12/12, 0 bugs).
 - Aclaración usuario 1111: su contraseña es 1111 (no 2002). Login OK con 1111/1111.
 - 'No sale el dashboard admin' en móvil: en PREVIEW sí sale (probable versión DESPLEGADA antigua -> el usuario debe redeploy para ver el dashboard nuevo).
+
+## Health check despliegue + optimización (2026-06-05)
+- deployment_agent: status WARN, SIN bloqueadores. Env vars OK, sin secretos/URLs hardcodeadas, /api prefijado, CORS OK, compila OK, supervisor OK, seed idempotente.
+- Único WARN: N+1 en GET /api/route-configs -> OPTIMIZADO (batch $in de driver_ids + _enrich_config(doc, users_map)). Verificado testing agent iteration_9 (28/28 backend, sin regresión).
+- App lista para desplegar. Nota: to_list(1000) limita listas a 1000 (suficiente a escala actual).
