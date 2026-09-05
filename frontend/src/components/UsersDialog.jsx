@@ -10,8 +10,11 @@ const inp = "w-full bg-slate-900 border border-slate-700 text-white text-sm roun
 const waLink = (tel, username, password) => {
   let p = (tel || "").replace(/\D/g, "");
   if (p.length === 9) p = "34" + p;
-  const msg = `BoxLogic - Acceso conductor%0AUsuario: ${username}%0AContraseña: ${password || "(la asignada al registrarte)"}`;
-  return `https://wa.me/${p}?text=${msg}`;
+  const msg =
+    `BoxLogic - Acceso conductor\n` +
+    `Usuario: ${username}\n` +
+    `Contraseña: ${password || "(la asignada al registrarte)"}`;
+  return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`;
 };
 
 const F = ({ label, k, form, set, type = "text" }) => (
