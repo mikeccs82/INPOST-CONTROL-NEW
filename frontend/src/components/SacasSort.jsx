@@ -6,6 +6,37 @@ import { mySacas, saveMySacas } from "../lib/api";
 const digits = (s) => String(s || "").replace(/\D/g, "");
 const last4 = (s) => digits(s).slice(-4);
 
+// Convierte números hablados en español a dígitos: "veintitrés setenta y uno" -> "2371", "cero tres tres siete" -> "0337"
+const NORM = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const UNITS = { cero: 0, uno: 1, una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9 };
+const TEENS = {
+  diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19,
+  veinte: 20, veintiuno: 21, veintidos: 22, veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29,
+};
+const TENS = { treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90 };
+
+const wordsToDigits = (text) => {
+  const tokens = NORM(text).split(/[\s,.-]+/).filter(Boolean);
+  let out = "";
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (/^\d+$/.test(t)) { out += t; continue; }
+    if (t === "y") continue;
+    if (t in UNITS) { out += String(UNITS[t]); continue; }
+    if (t in TEENS) { out += String(TEENS[t]); continue; }
+    if (t in TENS) {
+      let val = TENS[t];
+      if (tokens[i + 1] === "y" && tokens[i + 2] in UNITS) { val += UNITS[tokens[i + 2]]; i += 2; }
+      else if (tokens[i + 1] in UNITS) { val += UNITS[tokens[i + 1]]; i += 1; }
+      out += String(val);
+      continue;
+    }
+    if (t === "cien" || t === "ciento") { out += "100"; continue; }
+    // "mil" y palabras desconocidas se ignoran
+  }
+  return out;
+};
+
 export const SacasSort = () => {
   const [loading, setLoading] = useState(true);
   const [stops, setStops] = useState([]);
@@ -67,8 +98,9 @@ export const SacasSort = () => {
     rec.maxAlternatives = 1;
     rec.onresult = (ev) => {
       const t = ev.results[0][0].transcript;
-      setQuery(digits(t).slice(-4) || t);
-      resolve(t);
+      const num = wordsToDigits(t) || digits(t);
+      setQuery(last4(num) || num);
+      resolve(num);
     };
     rec.onerror = () => { toast.error("No se pudo escuchar. Inténtalo de nuevo."); setListening(false); };
     rec.onend = () => setListening(false);
