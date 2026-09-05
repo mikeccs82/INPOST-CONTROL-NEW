@@ -319,7 +319,7 @@ export const RepartoView = () => {
           <div data-testid="reparto-end-modal" onClick={(e) => e.stopPropagation()} className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-5">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-[#F26A21]/15 border border-[#F26A21]/40 flex items-center justify-center shrink-0"><AlertTriangle size={20} className="text-[#F26A21]" /></div>
-              <div className="flex-1"><h3 className="font-bold text-white">¿Hubo alguna incidencia?</h3><p className="text-sm text-slate-300 mt-0.5">En la entrega o recogida de esta parada.</p></div>
+              <div className="flex-1"><h3 className="font-bold text-white">¿Hubo algún problema?</h3><p className="text-sm text-slate-300 mt-0.5">En la entrega o recogida de esta parada.</p></div>
               <button onClick={() => setEndModal(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
             {endDetail === null ? (
