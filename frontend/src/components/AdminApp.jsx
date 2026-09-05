@@ -4,10 +4,11 @@ import { LogOut, ArrowLeft, ShieldCheck } from "lucide-react";
 import App from "../App";
 import { AdminDashboard } from "./AdminDashboard";
 import { RouteConfigPanel } from "./RouteConfigPanel";
+import { DiarioRuta } from "./DiarioRuta";
 import { UsersDialog } from "./UsersDialog";
 import "../App.css";
 
-const TITLES = { configs: "Configuración de rutas" };
+const TITLES = { configs: "Configuración de rutas", diario: "Diario Ruta" };
 
 export const AdminApp = ({ user, onLogout }) => {
   const [screen, setScreen] = useState("dashboard");
@@ -49,6 +50,7 @@ export const AdminApp = ({ user, onLogout }) => {
         />
       )}
       {screen === "configs" && <RouteConfigPanel />}
+      {screen === "diario" && <DiarioRuta />}
 
       <UsersDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
     </div>

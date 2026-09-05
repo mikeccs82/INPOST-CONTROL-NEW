@@ -981,6 +981,19 @@ class RouteConfigBody(BaseModel):
     departure_time: str = ""
 
 
+class JournalEntryBody(BaseModel):
+    date: Optional[str] = None
+    route_config_id: Optional[str] = None
+    route_number: str = ""
+    load_time: str = ""
+    dock: Optional[int] = None
+    driver_id: Optional[str] = None
+
+
+class JournalUpdate(BaseModel):
+    driver_id: Optional[str] = None
+
+
 class SimulationBody(BaseModel):
     stops: List[Stop]
     summary: Optional[dict] = None
@@ -1534,6 +1547,86 @@ async def update_config_stops(cid: str, file: UploadFile = File(...), admin=Depe
     await db.route_configs.update_one({"id": cid}, {"$set": {"stops": stops, "updated_at": now}})
     doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
     return await _enrich_config(doc)
+
+
+@api_router.get("/route-journal")
+async def list_route_journal(date: Optional[str] = None, admin=Depends(require_admin)):
+    d = date or _today()
+    entries = await db.route_journal.find({"date": d}, {"_id": 0}).to_list(1000)
+    # Auto-generar el diario de HOY desde las configuraciones si aún no existe
+    if not entries and d == _today():
+        configs = await db.route_configs.find({}, {"_id": 0}).sort("number", 1).to_list(1000)
+        new_entries = []
+        for c in configs:
+            ids = c.get("driver_ids") or ([c["driver_id"]] if c.get("driver_id") else [])
+            rows = ids if ids else [None]
+            for did in rows:
+                new_entries.append({
+                    "id": str(uuid.uuid4()), "date": d, "route_config_id": c.get("id"),
+                    "route_number": c.get("number", ""), "load_time": c.get("load_time", ""),
+                    "dock": c.get("dock"), "driver_id": did,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+        if new_entries:
+            await db.route_journal.insert_many([dict(e) for e in new_entries])
+            entries = await db.route_journal.find({"date": d}, {"_id": 0}).to_list(1000)
+    # enriquecer con datos del conductor
+    ids = list({e["driver_id"] for e in entries if e.get("driver_id")})
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "password_hash": 0}).to_list(1000):
+            umap[u["id"]] = u
+    for e in entries:
+        u = umap.get(e.get("driver_id"))
+        e["driver"] = ({"id": u["id"], "username": u.get("username"), "nombres": u.get("nombres", ""), "apellidos": u.get("apellidos", ""), "telefono": u.get("telefono", "")} if u else None)
+    entries.sort(key=lambda x: (str(x.get("route_number") or ""), x.get("created_at") or ""))
+    # días disponibles
+    all_dates = sorted({x["date"] for x in await db.route_journal.find({}, {"_id": 0, "date": 1}).to_list(1000)} | {_today()}, reverse=True)
+    return {"date": d, "today": _today(), "entries": entries, "dates": all_dates}
+
+
+@api_router.post("/route-journal")
+async def add_route_journal(body: JournalEntryBody, admin=Depends(require_admin)):
+    d = body.date or _today()
+    doc = body.model_dump()
+    doc["date"] = d
+    if body.route_config_id:
+        c = await db.route_configs.find_one({"id": body.route_config_id}, {"_id": 0})
+        if c:
+            doc["route_number"] = c.get("number", "")
+            doc["load_time"] = c.get("load_time", "")
+            doc["dock"] = c.get("dock")
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.route_journal.insert_one(doc)
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.put("/route-journal/{eid}")
+async def update_route_journal(eid: str, body: JournalUpdate, admin=Depends(require_admin)):
+    if not await db.route_journal.find_one({"id": eid}):
+        raise HTTPException(404, "Entrada no encontrada")
+    await db.route_journal.update_one({"id": eid}, {"$set": {"driver_id": body.driver_id, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True}
+
+
+@api_router.post("/route-journal/{eid}/duplicate")
+async def duplicate_route_journal(eid: str, admin=Depends(require_admin)):
+    src = await db.route_journal.find_one({"id": eid}, {"_id": 0})
+    if not src:
+        raise HTTPException(404, "Entrada no encontrada")
+    dup = {**src, "id": str(uuid.uuid4()), "driver_id": None, "created_at": datetime.now(timezone.utc).isoformat()}
+    dup.pop("driver", None)
+    await db.route_journal.insert_one(dup)
+    return {"ok": True, "id": dup["id"]}
+
+
+@api_router.delete("/route-journal/{eid}")
+async def delete_route_journal(eid: str, admin=Depends(require_admin)):
+    r = await db.route_journal.delete_one({"id": eid})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Entrada no encontrada")
+    return {"ok": True}
 
 
 @api_router.post("/route-configs/{cid}/simulation")

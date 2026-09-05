@@ -94,6 +94,11 @@ export const saveMyCarga = async (loadedStopIds) => (await client.put("/my/carga
 export const myReparto = async (date) => (await client.get("/my/reparto", { params: date ? { date } : {} })).data;
 export const saveMyReparto = async (idx, stops) => (await client.put("/my/reparto", { idx, stops })).data;
 export const saveMyLocation = async (payload) => (await client.post("/my/location", payload)).data;
+export const routeJournal = async (date) => (await client.get("/route-journal", { params: date ? { date } : {} })).data;
+export const addJournalEntry = async (body) => (await client.post("/route-journal", body)).data;
+export const updateJournalEntry = async (id, body) => (await client.put(`/route-journal/${id}`, body)).data;
+export const duplicateJournalEntry = async (id) => (await client.post(`/route-journal/${id}/duplicate`)).data;
+export const deleteJournalEntry = async (id) => (await client.delete(`/route-journal/${id}`)).data;
 
 // ---- Route Configs (Configuración de rutas) ----
 export const listRouteConfigs = async () => (await client.get("/route-configs")).data;
