@@ -57,7 +57,7 @@ class Stop(BaseModel):
     notes: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    stop_type: Optional[str] = None  # 'P' particular, 'PD' pudo, 'L' locker
+    stop_type: Optional[str] = None  # 'P' particular, 'PD' pudo, 'L' locker, 'L24' locker 24h
     service_min: Optional[float] = None  # minutes spent at this stop
 
 
@@ -101,7 +101,7 @@ class Settings(BaseModel):
     end: Optional[Waypoint] = None
     same_as_start: bool = True
     service_time_min: float = 0
-    service_by_type: Dict[str, float] = Field(default_factory=lambda: {"P": 0, "PD": 0, "L": 0})
+    service_by_type: Dict[str, float] = Field(default_factory=lambda: {"P": 0, "PD": 0, "L": 0, "L24": 0})
     departure_time: Optional[str] = "08:00"
     respect_windows: bool = True
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -505,23 +505,41 @@ def _parse_stops_from_df(df):
                 return cols[n]
         return None
 
-    c_addr = pick("dirección", "direccion", "address")
-    c_name = pick("nombre de ubicación", "nombre de ubicacion", "name", "nombre")
+    c_addr = pick("dirección", "direccion", "address", "domicilio", "calle")
+    c_name = pick("nombre del destinatario", "destinatario", "nombre de ubicación", "nombre de ubicacion", "name", "nombre")
     c_lat = pick("latitud", "latitude", "lat")
-    c_lon = pick("longitud", "longitude", "lon", "lng")
-    c_id = pick("id de orden", "id de ubicación", "id de ubicacion", "order id", "id")
-    c_wf = pick("ventana horaria desde", "window from")
-    c_wt = pick("ventana horaria hasta", "window to")
-    c_notes = pick("notas", "notes")
-    c_phone = pick("número de teléfono", "numero de telefono", "phone")
+    c_lon = pick("longitud", "longitude", "lon", "lng", "lng.", "long")
+    c_id = pick("id de orden", "id de ubicación", "id de ubicacion", "order id", "title", "identificador", "id")
+    c_wf = pick("ventana horaria desde", "window from", "start of time window", "start of time", "inicio ventana", "desde")
+    c_wt = pick("ventana horaria hasta", "window to", "end of time window", "end of time", "fin ventana", "hasta")
+    c_notes = pick("notas", "notes", "observaciones")
+    c_phone = pick("número de teléfono", "numero de telefono", "phone", "teléfono", "telefono")
     c_email = pick("email", "correo")
-    c_type = pick("tipo de parada", "tipo", "type", "stop type")
+    c_type = pick("tipo de parada", "tipo", "type", "stop type", "columna2")
+    c_route = pick("ruta", "route", "nº ruta", "n ruta", "numero de ruta", "número de ruta")
+
+    # Nombre del destinatario: si no hay columna de nombre dedicada, se usa "Notes".
+    name_src = c_name or c_notes
+    notes_col = c_notes if (c_notes and c_notes != name_src) else None
 
     def norm_type(v):
         if v is None:
             return None
         t = str(v).strip().upper()
-        return t if t in ("P", "PD", "L") else None
+        return t if t in ("P", "PD", "L", "L24") else None
+
+    def num(v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).strip().replace(" ", "").replace(",", ".")
+        if s == "":
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
 
     stops = []
     for _, row in df.iterrows():
@@ -533,10 +551,11 @@ def _parse_stops_from_df(df):
                 return None
             return v
 
-        lat = val(c_lat)
-        lon = val(c_lon)
+        lat = num(val(c_lat))
+        lon = num(val(c_lon))
         addr = val(c_addr)
-        name = val(c_name)
+        name = val(name_src)
+        route = val(c_route)
         if addr is None and lat is None:
             continue
         stop = {
@@ -546,12 +565,13 @@ def _parse_stops_from_df(df):
             "order_id": str(val(c_id)) if val(c_id) is not None else None,
             "window_from": str(val(c_wf)) if val(c_wf) is not None else None,
             "window_to": str(val(c_wt)) if val(c_wt) is not None else None,
-            "notes": str(val(c_notes)) if val(c_notes) is not None else None,
+            "notes": str(val(notes_col)) if val(notes_col) is not None else None,
             "phone": str(val(c_phone)) if val(c_phone) is not None else None,
             "email": str(val(c_email)) if val(c_email) is not None else None,
             "stop_type": norm_type(val(c_type)),
-            "lat": float(lat) if lat is not None else None,
-            "lon": float(lon) if lon is not None else None,
+            "route_number": str(route).strip() if route is not None else None,
+            "lat": lat,
+            "lon": lon,
         }
         stops.append(stop)
     return stops
@@ -866,7 +886,7 @@ async def delete_route(route_id: str):
 @api_router.post("/export")
 async def export_route(req: RouteRequest):
     rows = []
-    type_label = {"P": "Particular", "PD": "PUDO", "L": "Locker"}
+    type_label = {"P": "Particular", "PD": "PUDO", "L": "Locker", "L24": "Locker 24h"}
     for i, s in enumerate(req.stops):
         rows.append({
             "Orden": i + 1,
@@ -1586,6 +1606,62 @@ async def update_config_stops(cid: str, file: UploadFile = File(...), admin=Depe
     await db.route_configs.update_one({"id": cid}, {"$set": {"stops": stops, "updated_at": now}})
     doc = await db.route_configs.find_one({"id": cid}, {"_id": 0})
     return await _enrich_config(doc)
+
+
+@api_router.post("/route-configs/import-all")
+async def import_all_config_stops(file: UploadFile = File(...), admin=Depends(require_admin)):
+    """Importa UN Excel con paradas de varias rutas y las reparte a cada configuración
+    de ruta según la columna 'Ruta'. Reemplaza las paradas de cada ruta afectada."""
+    content = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"No se pudo leer el archivo: {e}")
+    stops = _parse_stops_from_df(df)
+    if not any(s.get("route_number") for s in stops):
+        raise HTTPException(400, "El Excel no tiene columna 'Ruta'. Usa 'Actualizar paradas' en cada ruta o añade la columna Ruta.")
+
+    # geocodifica solo las que no traen coordenadas y tienen dirección
+    to_geo = [s for s in stops if (s["lat"] is None or s["lon"] is None) and s["address"]]
+    for idx, s in enumerate(to_geo):
+        if idx > 0:
+            await asyncio.sleep(1.0)
+        cands = await _geocode_candidates(s["address"])
+        if cands:
+            s["lat"] = cands[0]["lat"]
+            s["lon"] = cands[0]["lon"]
+    stops = [s for s in stops if s["lat"] is not None and s["lon"] is not None]
+
+    # agrupa por número de ruta
+    groups: Dict[str, list] = {}
+    for s in stops:
+        rn = (s.get("route_number") or "").strip()
+        if rn:
+            groups.setdefault(rn, []).append(s)
+
+    configs = await db.route_configs.find({}, {"_id": 0, "id": 1, "number": 1}).to_list(1000)
+    by_number = {str(c.get("number", "")).strip(): c for c in configs}
+
+    now = datetime.now(timezone.utc).isoformat()
+    assigned, unmatched = [], []
+    for rn, sts in groups.items():
+        cfg = by_number.get(rn)
+        if not cfg:
+            unmatched.append({"route_number": rn, "stops": len(sts)})
+            continue
+        await db.route_configs.update_one({"id": cfg["id"]}, {"$set": {"stops": sts, "updated_at": now}})
+        assigned.append({"route_number": rn, "stops": len(sts)})
+
+    assigned.sort(key=lambda x: str(x["route_number"]))
+    unmatched.sort(key=lambda x: str(x["route_number"]))
+    return {
+        "ok": True,
+        "total_stops": len(stops),
+        "routes_updated": len(assigned),
+        "assigned": assigned,
+        "unmatched": unmatched,
+    }
+
 
 
 @api_router.get("/route-journal")

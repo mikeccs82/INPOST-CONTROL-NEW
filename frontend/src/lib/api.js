@@ -113,6 +113,11 @@ export const updateConfigStops = async (id, file) => {
   form.append("file", file);
   return (await client.post(`/route-configs/${id}/stops`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
 };
+export const importAllConfigStops = async (file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return (await client.post(`/route-configs/import-all`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+};
 export const saveSimulation = async (id, payload) => (await client.post(`/route-configs/${id}/simulation`, payload)).data;
 
 export const saveRoute = async (payload) => {

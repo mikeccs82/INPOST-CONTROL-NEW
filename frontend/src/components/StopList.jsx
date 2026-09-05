@@ -79,6 +79,7 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                             <option value="P">Particular</option>
                             <option value="PD">PUDO</option>
                             <option value="L">Locker</option>
+                            <option value="L24">Locker 24h</option>
                           </select>
                           {s.service_min != null && (
                             <span data-testid={`stop-min-${index}`} className="text-[10px] font-mono-tech text-[#F26A21]">{s.service_min}m</span>

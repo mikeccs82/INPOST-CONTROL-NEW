@@ -135,8 +135,8 @@ export const WarehousePanel = ({ warehouse, onChange, onSave }) => {
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-1.5">
               <Clock size={11} /> Minutos por tipo de parada
             </span>
-            <div className="grid grid-cols-3 gap-2">
-              {[["P", "Particular"], ["PD", "PUDO"], ["L", "Locker"]].map(([k, label]) => (
+            <div className="grid grid-cols-4 gap-2">
+              {[["P", "Particular"], ["PD", "PUDO"], ["L", "Locker"], ["L24", "Locker 24h"]].map(([k, label]) => (
                 <div key={k}>
                   <div className="text-[10px] text-slate-300 font-semibold mb-1 text-center">{label}</div>
                   <input

@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Route, MapPin, Clock, Anchor, CalendarClock, X, Loader2, Trash2, Upload, Eye, Save, FlaskConical } from "lucide-react";
+import { Plus, Route, MapPin, Clock, Anchor, CalendarClock, X, Loader2, Trash2, Upload, Eye, Save, FlaskConical, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
 import {
   listRouteConfigs, createRouteConfig, updateRouteConfig, deleteRouteConfig,
-  updateConfigStops, getRouteConfig,
+  updateConfigStops, getRouteConfig, importAllConfigStops,
 } from "../lib/api";
 import { fmtDistance, fmtDuration } from "../lib/format";
 
@@ -242,11 +242,53 @@ const Card = ({ r, onClick }) => (
   </button>
 );
 
+const ImportResultModal = ({ result, onClose }) => (
+  <Modal testid="rc-import-result" onClose={onClose} wide>
+    <div className="flex items-center justify-between p-4 border-b border-slate-700">
+      <h3 className="font-bold text-white flex items-center gap-2"><FileSpreadsheet size={18} className="text-[#1E5AA8]" /> Importación completada</h3>
+      <button data-testid="rc-import-close" onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
+    </div>
+    <div className="p-4 space-y-4">
+      <div className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2.5 text-sm text-slate-200">
+        <b className="text-white">{result.total_stops}</b> paradas repartidas en <b className="text-white">{result.routes_updated}</b> ruta(s).
+      </div>
+      {result.assigned?.length > 0 && (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 mb-1.5 flex items-center gap-1.5"><CheckCircle2 size={13} /> Rutas actualizadas</div>
+          <div className="flex flex-wrap gap-1.5">
+            {result.assigned.map((a) => (
+              <span key={a.route_number} data-testid={`rc-import-ok-${a.route_number}`} className="text-xs font-mono-tech bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1">
+                {a.route_number} · {a.stops}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {result.unmatched?.length > 0 && (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-1.5 flex items-center gap-1.5"><AlertTriangle size={13} /> Sin configuración de ruta (no se importaron)</div>
+          <div className="flex flex-wrap gap-1.5">
+            {result.unmatched.map((a) => (
+              <span key={a.route_number} data-testid={`rc-import-miss-${a.route_number}`} className="text-xs font-mono-tech bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded px-2 py-1">
+                {a.route_number} · {a.stops}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Crea estas rutas en "Agregar nueva ruta" y vuelve a importar para incluir sus paradas.</p>
+        </div>
+      )}
+      <button data-testid="rc-import-done" onClick={onClose} className="w-full bg-[#F26A21] hover:bg-[#f58220] text-white font-bold py-2.5 rounded-md transition-colors">Entendido</button>
+    </div>
+  </Modal>
+);
+
 export const RouteConfigPanel = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newOpen, setNewOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -257,11 +299,33 @@ export const RouteConfigPanel = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  const importAll = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const r = await importAllConfigStops(file);
+      setImportResult(r);
+      toast.success(`${r.routes_updated} ruta(s) actualizadas · ${r.total_stops} paradas`);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "No se pudo importar el Excel");
+    } finally { setImporting(false); }
+  };
+
   return (
     <div data-testid="route-config-panel" className="flex-1 min-h-0 overflow-y-auto thin-scroll bg-slate-950 p-4">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">Configuración de rutas</h1>
         <p className="text-sm text-slate-400 mb-4">{items.length} ruta(s) · la asignación del conductor se hace en Asignación de Ruta</p>
+
+        <label data-testid="rc-import-all" className="mb-4 flex items-center justify-center gap-2 rounded-xl bg-[#1E5AA8] hover:bg-[#184a8c] text-white font-bold text-sm py-3 transition-colors cursor-pointer">
+          {importing ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
+          {importing ? "Importando y repartiendo…" : "Importar Excel de todas las rutas"}
+          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importAll} disabled={importing} />
+        </label>
+        <p className="text-[11px] text-slate-500 -mt-2 mb-4 text-center">Un solo Excel con la columna <b>Ruta</b> · las paradas se reparten a cada ruta por su número</p>
 
         {loading ? (
           <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-[#F26A21]" /></div>
@@ -281,6 +345,7 @@ export const RouteConfigPanel = () => {
 
       {newOpen && <NewModal onClose={() => setNewOpen(false)} onCreated={load} />}
       {detailId && <DetailModal id={detailId} onClose={() => setDetailId(null)} onChanged={load} />}
+      {importResult && <ImportResultModal result={importResult} onClose={() => setImportResult(null)} />}
     </div>
   );
 };

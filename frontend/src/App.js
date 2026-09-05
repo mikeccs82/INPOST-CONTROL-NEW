@@ -63,7 +63,7 @@ function App({ user, onLogout, onBack }) {
         start: s.start || null,
         end: s.end || null,
         sameAsStart: s.same_as_start ?? true,
-        serviceByType: s.service_by_type || { P: 0, PD: 0, L: 0 },
+        serviceByType: s.service_by_type || { P: 0, PD: 0, L: 0, L24: 0 },
         untypedMin: s.service_time_min ?? 0,
         departureTime: s.departure_time || "",
         respectWindows: s.respect_windows ?? true,
