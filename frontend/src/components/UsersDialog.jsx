@@ -67,7 +67,7 @@ export const UsersDialog = ({ open, onClose }) => {
                       <div className="text-xs text-slate-400 truncate">{[d.marca, d.modelo, d.anio, d.matricula, d.capacidad, d.color].filter(Boolean).join(" · ")}</div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-2">
-                      <a data-testid={`wa-${d.id}`} href={waLink(d.telefono, d.username, "")} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400" title="Enviar acceso por WhatsApp"><MessageCircle size={17} /></a>
+                      <a data-testid={`wa-${d.id}`} href={waLink(d.telefono, d.username, d.password_plain || "")} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400" title="Enviar acceso por WhatsApp"><MessageCircle size={17} /></a>
                       <button data-testid={`edit-user-${d.id}`} onClick={() => { setForm({ ...EMPTY, ...d, password: "" }); setEditId(d.id); setMode("form"); }} className="text-slate-400 hover:text-white"><Pencil size={16} /></button>
                       <button data-testid={`del-user-${d.id}`} onClick={() => del(d.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
                     </div>

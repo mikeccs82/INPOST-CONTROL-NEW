@@ -970,7 +970,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         payload = jwt.decode(authorization[7:], os.environ["JWT_SECRET"], algorithms=["HS256"])
     except Exception:
         raise HTTPException(401, "Token inválido")
-    doc = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0, "password_hash": 0})
+    doc = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0, "password_hash": 0, "password_plain": 0})
     if not doc:
         raise HTTPException(401, "Usuario no encontrado")
     return doc
@@ -991,7 +991,7 @@ async def login(body: LoginBody):
     u = await db.users.find_one({"username": body.username})
     if not u or not bcrypt.checkpw(body.password.encode(), u["password_hash"].encode()):
         raise HTTPException(401, "Usuario o contraseña incorrectos")
-    pub = {k: v for k, v in u.items() if k not in ("_id", "password_hash")}
+    pub = {k: v for k, v in u.items() if k not in ("_id", "password_hash", "password_plain")}
     return {"token": create_token(u), "user": pub}
 
 
@@ -1012,6 +1012,7 @@ async def create_user(body: UserCreate, admin=Depends(require_admin)):
     doc = body.model_dump()
     pw = doc.pop("password")
     doc["password_hash"] = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    doc["password_plain"] = pw
     doc["id"] = str(uuid.uuid4())
     doc["role"] = "driver"
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -1027,6 +1028,7 @@ async def update_user(uid: str, body: UserUpdate, admin=Depends(require_admin)):
     pw = upd.pop("password", None)
     if pw:
         upd["password_hash"] = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        upd["password_plain"] = pw
     if upd:
         await db.users.update_one({"id": uid}, {"$set": upd})
     return await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
