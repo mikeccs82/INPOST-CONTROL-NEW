@@ -136,6 +136,13 @@
 - Cada parada tiene botón "Ir" que abre Google Maps con navegación (`maps/dir/?api=1&destination=lat,lon&travelmode=driving`; fallback a dirección si no hay coords). En móvil abre la app de Google Maps.
 - DriverDashboard: card 'reparto' soon:false -> onOpenReparto -> screen 'reparto'. Solo frontend (GET /my/route-config).
 - Verificado por captura (4 paradas, botones Ir renderizados).
+
+## Reparto: flujo parada a parada entregar/recoger (2026-06-09)
+- RepartoView convertido en flujo secuencial: tarjeta de parada ACTUAL con máquina de estados. Fases: viaje ("Ir con Google Maps" + "Ya estoy en el sitio") -> en sitio (botones "Entregar" y "Recoger") -> "Siguiente parada".
+- Entregar: muestra cantidad de sacas y bultos a entregar (de saca_session.positions por stop_id) + botón "Entregado".
+- Recoger: contador +/- para "¿cuántas sacas recoges?" + botón "Recogido (N)".
+- Lista inferior con estado por parada (Hecha/Actual/pendiente). Al pulsar "Siguiente parada" avanza; al final "¡Ruta completada!".
+- SOLO frontend por ahora (sin persistencia). Pendiente: el usuario comentará variaciones. Verificado por captura (Ir->en sitio->entregar 1/0->entregado->recoger 2->recogido).
 - BUG usuario: "no se está memorizando la carga del vehículo". El set `loaded` de CargaLista vivía solo en estado local; al recargar/volver se perdía el progreso.
 - FIX: nueva colección independiente `carga_sessions` (diario por conductor+fecha) para registrar qué paradas ya se ingresaron al furgón.
   - Backend: GET /api/my/carga (devuelve {date, loaded_stop_ids} del día) y PUT /api/my/carga (upsert por driver_id+date con loaded_stop_ids, route_config_id, route_number, updated_at). Modelo CargaBody.
