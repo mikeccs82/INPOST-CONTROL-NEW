@@ -103,6 +103,9 @@ export const deleteJournalEntry = async (id) => (await client.delete(`/route-jou
 export const loadAllJournal = async (date) => (await client.post("/route-journal/load-all", null, { params: date ? { date } : {} })).data;
 export const routeStatus = async (date) => (await client.get("/route-status", { params: date ? { date } : {} })).data;
 export const listDelegaciones = async () => (await client.get("/delegaciones")).data;
+export const createDelegacion = async (body) => (await client.post("/delegaciones", body)).data;
+export const updateDelegacion = async (id, body) => (await client.put(`/delegaciones/${id}`, body)).data;
+export const deleteDelegacion = async (id) => (await client.delete(`/delegaciones/${id}`)).data;
 export const createNotification = async (body) => (await client.post("/my/notifications", body)).data;
 export const listNotifications = async () => (await client.get("/notifications")).data;
 export const notificationsUnread = async () => (await client.get("/notifications/unread-count")).data;

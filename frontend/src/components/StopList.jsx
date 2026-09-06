@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { GripVertical, Trash2, Flag, Clock } from "lucide-react";
+import { GripVertical, Trash2, Flag, Clock, ChevronUp, ChevronDown } from "lucide-react";
 
 const TYPE_LABELS = { P: "Particular", PD: "PUDO", L: "Locker", L24: "Locker 24h" };
 
-export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onChangeType, schedule = {}, onChangeWindow, readOnlyMeta = false }) => {
+export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onChangeType, schedule = {}, onChangeWindow, readOnlyMeta = false, canReorder = true }) => {
   const refs = useRef({});
 
   useEffect(() => {
@@ -36,8 +36,9 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
               const isSel = s.id === selectedId;
               const sched = schedule[s.id];
               const late = sched?.late;
+              const movable = canReorder && !s.pendiente;
               return (
-                <Draggable key={s.id} draggableId={s.id} index={index}>
+                <Draggable key={s.id} draggableId={String(s.id)} index={index} isDragDisabled={!movable}>
                   {(prov, snapshot) => (
                     <div
                       ref={(el) => {
@@ -57,9 +58,29 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                           : "border-slate-700 hover:border-slate-500"
                       }`}
                     >
-                      <span {...prov.dragHandleProps} onClick={(e) => e.stopPropagation()} className="text-slate-500 hover:text-white cursor-grab active:cursor-grabbing">
+                      <span {...prov.dragHandleProps} onClick={(e) => e.stopPropagation()} className={`hidden md:flex text-slate-500 ${movable ? "hover:text-white cursor-grab active:cursor-grabbing" : "opacity-30 cursor-not-allowed"}`}>
                         <GripVertical size={18} />
                       </span>
+                      <div className="flex flex-col shrink-0 -my-1">
+                        <button
+                          data-testid={`stop-up-${index}`}
+                          disabled={!movable || index === 0}
+                          onClick={(e) => { e.stopPropagation(); onReorder(index, index - 1); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-t-md bg-slate-700 border border-slate-600 text-slate-200 disabled:opacity-25 active:bg-[#F26A21]"
+                          title="Subir"
+                        >
+                          <ChevronUp size={16} />
+                        </button>
+                        <button
+                          data-testid={`stop-down-${index}`}
+                          disabled={!movable || index === stops.length - 1}
+                          onClick={(e) => { e.stopPropagation(); onReorder(index, index + 1); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-b-md bg-slate-700 border border-t-0 border-slate-600 text-slate-200 disabled:opacity-25 active:bg-[#F26A21]"
+                          title="Bajar"
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
                       <div className="shrink-0 w-8 h-8 flex items-center justify-center font-mono-tech font-bold text-sm bg-[#F26A21] text-white rounded-full">
                         {index + 1}
                       </div>

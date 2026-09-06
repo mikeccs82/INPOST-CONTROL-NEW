@@ -241,7 +241,7 @@ export const DriverApp = ({ user, onLogout }) => {
                     </div>
                   </div>
                 )}
-                <StopList stops={stops} onReorder={reorder} onRemove={() => {}} selectedId={selectedId} onSelect={setSelectedId} onChangeType={() => {}} schedule={{}} onChangeWindow={() => {}} readOnlyMeta={true} />
+                <StopList stops={stops} onReorder={reorder} onRemove={() => {}} selectedId={selectedId} onSelect={setSelectedId} onChangeType={() => {}} schedule={{}} onChangeWindow={() => {}} readOnlyMeta={true} canReorder={rEditable} />
                 {(driverRoute?.round_trip || driverRoute?.end) && (
                   <div data-testid="route-nave-end" className="mt-1 flex items-center gap-2.5 rounded-md bg-sky-600/10 border border-sky-500/40 px-3 py-2">
                     <div className="w-7 h-7 rounded-md bg-sky-600 flex items-center justify-center shrink-0"><Warehouse size={15} className="text-white" /></div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Route, Activity, Users, FlaskConical, LogOut, ClipboardList, Bell } from "lucide-react";
+import { Route, Activity, Users, FlaskConical, LogOut, ClipboardList, Bell, Building2 } from "lucide-react";
 import { notificationsUnread } from "../lib/api";
 
 const CARDS = [
@@ -7,6 +7,7 @@ const CARDS = [
   { key: "diario", label: "Asignación de Ruta", icon: ClipboardList, accent: "#16A34A", soon: false },
   { key: "estado", label: "Estado rutas", icon: Activity, accent: "#2563EB", soon: false },
   { key: "notificaciones", label: "Notificaciones", icon: Bell, accent: "#DC2626", soon: false },
+  { key: "delegaciones", label: "Delegaciones y naves", icon: Building2, accent: "#16A34A", soon: false },
   { key: "conductores", label: "Conductores", icon: Users, accent: "#2563EB", soon: false },
   { key: "simulacion", label: "Simulación de ruta", icon: FlaskConical, accent: "#F26A21", soon: false },
 ];

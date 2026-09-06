@@ -7,10 +7,11 @@ import { RouteConfigPanel } from "./RouteConfigPanel";
 import { DiarioRuta } from "./DiarioRuta";
 import { EstadoRutas } from "./EstadoRutas";
 import { Notificaciones } from "./Notificaciones";
+import { DelegacionesPanel } from "./DelegacionesPanel";
 import { UsersDialog } from "./UsersDialog";
 import "../App.css";
 
-const TITLES = { configs: "Configuración de rutas", diario: "Asignación de Ruta", estado: "Estado rutas", notificaciones: "Notificaciones" };
+const TITLES = { configs: "Configuración de rutas", diario: "Asignación de Ruta", estado: "Estado rutas", notificaciones: "Notificaciones", delegaciones: "Delegaciones y naves" };
 
 export const AdminApp = ({ user, onLogout }) => {
   const [screen, setScreen] = useState("dashboard");
@@ -55,6 +56,7 @@ export const AdminApp = ({ user, onLogout }) => {
       {screen === "diario" && <DiarioRuta />}
       {screen === "estado" && <EstadoRutas />}
       {screen === "notificaciones" && <Notificaciones />}
+      {screen === "delegaciones" && <DelegacionesPanel />}
 
       <UsersDialog open={driversOpen} onClose={() => setDriversOpen(false)} />
     </div>

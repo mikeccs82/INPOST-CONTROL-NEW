@@ -819,6 +819,24 @@ async def list_delegaciones():
     return await db.delegaciones.find({}, {"_id": 0}).sort("name", 1).to_list(100)
 
 
+class DelegacionBody(BaseModel):
+    name: str = ""
+    nave_address: str = ""
+    nave_lat: Optional[float] = None
+    nave_lon: Optional[float] = None
+
+
+async def _geo_nave(body: DelegacionBody):
+    lat, lon = body.nave_lat, body.nave_lon
+    if (lat is None or lon is None) and body.nave_address:
+        cands = await _geocode_candidates(body.nave_address)
+        if cands:
+            lat, lon = cands[0]["lat"], cands[0]["lon"]
+    return lat, lon
+
+
+
+
 @api_router.get("/settings")
 async def get_settings():
     doc = await db.settings.find_one({"id": "default"}, {"_id": 0})
@@ -1112,6 +1130,52 @@ async def require_admin(user=Depends(get_current_user)):
     if user.get("role") != "admin":
         raise HTTPException(403, "Solo el administrador puede hacer esto")
     return user
+
+
+@api_router.post("/delegaciones")
+async def create_delegacion(body: DelegacionBody, admin=Depends(require_admin)):
+    if not body.name.strip() or not body.nave_address.strip():
+        raise HTTPException(400, "Nombre y dirección de la nave obligatorios")
+    if await db.delegaciones.find_one({"name": body.name.strip()}):
+        raise HTTPException(400, "Ya existe una delegación con ese nombre")
+    lat, lon = await _geo_nave(body)
+    if lat is None or lon is None:
+        raise HTTPException(400, "No se pudo geolocalizar la nave. Revisa la dirección o pon coordenadas.")
+    doc = {"id": str(uuid.uuid4()), "name": body.name.strip(), "nave_address": body.nave_address.strip(), "nave_lat": float(lat), "nave_lon": float(lon)}
+    await db.delegaciones.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "delegacion": doc}
+
+
+@api_router.put("/delegaciones/{did}")
+async def update_delegacion(did: str, body: DelegacionBody, admin=Depends(require_admin)):
+    d = await db.delegaciones.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Delegación no encontrada")
+    lat, lon = body.nave_lat, body.nave_lon
+    if (lat is None or lon is None) and body.nave_address and body.nave_address.strip() != d.get("nave_address"):
+        cands = await _geocode_candidates(body.nave_address)
+        if cands:
+            lat, lon = cands[0]["lat"], cands[0]["lon"]
+    if lat is None or lon is None:
+        lat, lon = d.get("nave_lat"), d.get("nave_lon")
+    upd = {"nave_address": body.nave_address.strip() or d.get("nave_address"), "nave_lat": float(lat), "nave_lon": float(lon)}
+    await db.delegaciones.update_one({"id": did}, {"$set": upd})
+    return {"ok": True}
+
+
+@api_router.delete("/delegaciones/{did}")
+async def delete_delegacion(did: str, admin=Depends(require_admin)):
+    d = await db.delegaciones.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Delegación no encontrada")
+    used = await db.route_configs.count_documents({"delegacion": d["name"]})
+    if used:
+        raise HTTPException(400, f"No se puede borrar: {used} ruta(s) usan esta delegación")
+    await db.delegaciones.delete_one({"id": did})
+    return {"ok": True}
+
+
 
 
 def _today():

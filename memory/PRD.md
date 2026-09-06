@@ -270,3 +270,12 @@
 - Frontend StopList: badge rojo "PENDIENTE AYER" (data-testid stop-pendiente-{index}) en esas paradas.
 - Verificado API (build pone 2 pendientes primero; entregar los 2 -> status entregado; rebuild 0 pendientes) y UI (badges rojos en 1ª y 2ª parada).
 - COMPLETO el control de sobrantes (Fases 1-4).
+
+## FIX P0 reordenar paradas en móvil + Panel Delegaciones en Admin (2026-09-06)
+- **FIX P0 (recurrente) reordenar en "Ordenar Ruta" (Paso 2)**: el drag & drop de @hello-pangea/dnd funcionaba con ratón (desktop) pero fallaba en móvil/táctil (requiere long-press y choca con el scroll de la lista). Solución robusta multiplataforma:
+  - StopList: botones ▲/▼ (data-testid stop-up-{index} / stop-down-{index}) en CADA parada, visibles en todos los tamaños; llaman onReorder(index, index±1). El asa de arrastre (grip) se mantiene solo en desktop (md+).
+  - Nueva prop `canReorder` (DriverApp pasa rEditable): en días de solo lectura oculta/inhabilita los botones y el drag (isDragDisabled). Las paradas `pendiente` (PENDIENTE AYER) también quedan bloqueadas (no movibles).
+  - draggableId ahora String(s.id) por robustez con React 19.
+  - Verificado: móvil botón ▼ y ▲ reordenan y PERSISTEN (curl /my/route-config confirma orden guardado); drag con ratón sigue OK en desktop y simulación admin.
+- **Panel Delegaciones conectado al Admin**: DelegacionesPanel.jsx (ya existía) enganchado. Nueva tarjeta "Delegaciones y naves" (Building2) en AdminDashboard + screen 'delegaciones' en AdminApp. Permite crear/editar/borrar delegaciones y su dirección de nave (salida/retorno de rutas). Backend geocodifica al crear/editar; no deja borrar una delegación usada por rutas.
+  - Verificado: card presente, panel muestra Barcelona + Madrid con dirección editable y coords; CRUD por curl (crear Valencia TEST -> geocodifica, update, delete OK).
