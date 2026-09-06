@@ -72,14 +72,12 @@ export const RepartoView = () => {
 
   const captureLocation = (stopId) => {
     if (!editable) return;
-    if (!navigator.geolocation) { toast.error("Tu dispositivo no permite ubicación"); return; }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        saveMyLocation({ stop_id: stopId, lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
-          .then(() => toast.success("Ubicación registrada"))
-          .catch(() => toast.error("No se pudo guardar la ubicación"));
+        saveMyLocation({ stop_id: stopId, lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }).catch(() => {});
       },
-      () => toast.error("No se pudo obtener tu ubicación (permite el GPS)"),
+      () => {},
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
