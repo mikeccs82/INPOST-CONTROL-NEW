@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { Loader2, CalendarDays, Copy, Trash2, Plus, Phone, Clock, Anchor, Route as RouteIcon, ArrowUp, ArrowDown } from "lucide-react";
-import { routeJournal, listUsers, listRouteConfigs, addJournalEntry, updateJournalEntry, duplicateJournalEntry, deleteJournalEntry, loadAllJournal } from "../lib/api";
+import { Loader2, CalendarDays, Copy, Trash2, Plus, Phone, Clock, Anchor, Route as RouteIcon, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { routeJournal, listUsers, listRouteConfigs, addJournalEntry, updateJournalEntry, duplicateJournalEntry, deleteJournalEntry, resetJournalEntry, loadAllJournal } from "../lib/api";
 
 const fmtDate = (d) => {
   try {
@@ -45,6 +45,15 @@ export const DiarioRuta = () => {
   };
   const dup = async (eid) => { try { await duplicateJournalEntry(eid); toast.success("Ruta duplicada"); load(date); } catch { toast.error("No se pudo duplicar"); } };
   const del = async (eid) => { try { await deleteJournalEntry(eid); load(date); } catch { toast.error("No se pudo eliminar"); } };
+  const [resetting, setResetting] = useState(null);
+  const reset = async (e) => {
+    const name = e.driver ? (`${e.driver.nombres} ${e.driver.apellidos}`.trim() || e.driver.username) : "";
+    if (!window.confirm(`¿Reiniciar el día de ${name} en la Ruta ${e.route_number}?\n\nSe borrará TODO lo que haya hecho hoy: Ordenar Sacas, Ordenar Ruta, Carga y Reparto. La asignación y las paradas de la ruta NO se tocan.`)) return;
+    setResetting(e.id);
+    try { await resetJournalEntry(e.id); toast.success(`Día de ${name} reiniciado`); load(date); }
+    catch (err) { toast.error(err?.response?.data?.detail || "No se pudo reiniciar"); }
+    finally { setResetting(null); }
+  };
   const addRow = async () => {
     if (!newRoute) return;
     const cfg = configs.find((c) => c.id === newRoute);
@@ -185,6 +194,12 @@ export const DiarioRuta = () => {
                     {editable && (
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-end gap-1.5">
+                          {e.driver_id && (
+                            <button data-testid={`diario-reset-${e.id}`} onClick={() => reset(e)} disabled={resetting === e.id} title="Reiniciar el día del conductor (borra sacas, ruta, carga y reparto)"
+                              className="flex items-center gap-1 text-xs font-semibold text-amber-400 hover:text-white hover:bg-amber-600 border border-amber-500/50 px-2 py-1.5 rounded-md transition-colors disabled:opacity-50">
+                              {resetting === e.id ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Reiniciar
+                            </button>
+                          )}
                           <button data-testid={`diario-dup-${e.id}`} onClick={() => dup(e.id)} title="Duplicar ruta para otro conductor"
                             className="flex items-center gap-1 text-xs font-semibold text-[#4b8fe0] hover:text-white hover:bg-[#1E5AA8] border border-[#1E5AA8]/50 px-2 py-1.5 rounded-md transition-colors"><Copy size={13} /> Repetir</button>
                           <button data-testid={`diario-del-${e.id}`} onClick={() => del(e.id)} title="Eliminar línea"

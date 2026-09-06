@@ -100,6 +100,7 @@ export const addJournalEntry = async (body) => (await client.post("/route-journa
 export const updateJournalEntry = async (id, body) => (await client.put(`/route-journal/${id}`, body)).data;
 export const duplicateJournalEntry = async (id) => (await client.post(`/route-journal/${id}/duplicate`)).data;
 export const deleteJournalEntry = async (id) => (await client.delete(`/route-journal/${id}`)).data;
+export const resetJournalEntry = async (id) => (await client.post(`/route-journal/${id}/reset`)).data;
 export const loadAllJournal = async (date) => (await client.post("/route-journal/load-all", null, { params: date ? { date } : {} })).data;
 export const routeStatus = async (date) => (await client.get("/route-status", { params: date ? { date } : {} })).data;
 export const listDelegaciones = async () => (await client.get("/delegaciones")).data;

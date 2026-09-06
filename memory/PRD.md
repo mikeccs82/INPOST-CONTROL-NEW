@@ -279,3 +279,9 @@
   - Verificado: móvil botón ▼ y ▲ reordenan y PERSISTEN (curl /my/route-config confirma orden guardado); drag con ratón sigue OK en desktop y simulación admin.
 - **Panel Delegaciones conectado al Admin**: DelegacionesPanel.jsx (ya existía) enganchado. Nueva tarjeta "Delegaciones y naves" (Building2) en AdminDashboard + screen 'delegaciones' en AdminApp. Permite crear/editar/borrar delegaciones y su dirección de nave (salida/retorno de rutas). Backend geocodifica al crear/editar; no deja borrar una delegación usada por rutas.
   - Verificado: card presente, panel muestra Barcelona + Madrid con dirección editable y coords; CRUD por curl (crear Valencia TEST -> geocodifica, update, delete OK).
+
+## Botón Reiniciar día del conductor en Asignación de Ruta (2026-09-06)
+- Nuevo botón "Reiniciar" (ámbar) por cada línea del Diario que tenga conductor asignado (solo en el día editable). Pide confirmación y borra TODO el avance de ese conductor en esa fecha: Ordenar Sacas, Ordenar Ruta, Carga y Reparto (+ ubicaciones y notificaciones). NO borra la asignación ni las paradas de la Configuración de la ruta.
+- Backend: POST /api/route-journal/{eid}/reset (admin). Borra de saca_day_sessions, route_day_sessions, carga_sessions, reparto_sessions, driver_locations, notifications donde {driver_id, date} coincidan. 400 si la línea no tiene conductor.
+- Frontend api.js: resetJournalEntry(id). DiarioRuta: botón data-testid diario-reset-{id} con confirm y spinner.
+- Verificado: curl (route_day_session=1 borrada -> driver_route 0 stops, editable sigue True) y UI (botón visible para Ruta 8002).

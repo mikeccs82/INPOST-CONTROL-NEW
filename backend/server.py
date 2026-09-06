@@ -1929,6 +1929,26 @@ async def delete_route_journal(eid: str, admin=Depends(require_admin)):
     return {"ok": True}
 
 
+@api_router.post("/route-journal/{eid}/reset")
+async def reset_route_journal(eid: str, admin=Depends(require_admin)):
+    """Reinicia el día del conductor de esta línea: borra Ordenar Sacas, Ordenar Ruta,
+    Carga, Reparto, ubicaciones y notificaciones de ese conductor en esa fecha.
+    NO borra la asignación (la línea del Diario) ni las paradas de la Configuración de la ruta."""
+    entry = await db.route_journal.find_one({"id": eid}, {"_id": 0})
+    if not entry:
+        raise HTTPException(404, "Entrada no encontrada")
+    driver_id = entry.get("driver_id")
+    d = entry.get("date")
+    if not driver_id:
+        raise HTTPException(400, "Esta ruta no tiene conductor asignado, no hay nada que reiniciar")
+    q = {"driver_id": driver_id, "date": d}
+    deleted = {}
+    for col in ("saca_day_sessions", "route_day_sessions", "carga_sessions", "reparto_sessions", "driver_locations", "notifications"):
+        r = await db[col].delete_many(q)
+        deleted[col] = r.deleted_count
+    return {"ok": True, "deleted": deleted}
+
+
 @api_router.post("/route-journal/load-all")
 async def load_all_route_journal(date: Optional[str] = None, admin=Depends(require_admin)):
     d = date or _today()
