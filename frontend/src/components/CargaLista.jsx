@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Hash, ShoppingBag, Package, CheckCircle2, Truck, Undo2, ArrowRight, AlertTriangle, X } from "lucide-react";
-import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga, myReparto } from "../lib/api";
+import { myRouteConfig, mySacas, saveDriverRouteOrder, myCarga, saveMyCarga, myReparto, reportSobrante } from "../lib/api";
 import { DayBar } from "./DayBar";
 
 export const CargaLista = ({ onFinish }) => {
@@ -79,6 +79,12 @@ export const CargaLista = ({ onFinish }) => {
       const pickupStops = stops.filter((s) => !loaded.has(s.id)).map((s) => ({ ...s, pickup_only: true }));
       const ordered = [...loadedStops, ...pickupStops];
       await saveDriverRouteOrder(ordered);
+      // Sobrante = paradas que NO entraron por capacidad (loadable no cargadas). Notifica al admin (por defecto: en nave).
+      const sacasById = {}; items.forEach((it) => { sacasById[it.id] = it.sacas; });
+      const overflow = stops
+        .filter((s) => s.pickup_only !== true && !loaded.has(s.id))
+        .map((s) => ({ stop_id: s.id, name: s.name, address: s.address, sacas: sacasById[s.id] || 0 }));
+      try { await reportSobrante(overflow); } catch (e) { /* no bloquea */ }
       toast.success(`Ruta actualizada: ${loadedStops.length} entrega(s) · ${pickupStops.length} solo recogida`);
       onFinish?.();
     } catch (e) { toast.error("No se pudo actualizar la ruta"); }

@@ -108,6 +108,7 @@ export const listNotifications = async () => (await client.get("/notifications")
 export const notificationsUnread = async () => (await client.get("/notifications/unread-count")).data;
 export const markNotificationsRead = async () => (await client.post("/notifications/mark-read")).data;
 export const resolveNotification = async (id) => (await client.put(`/notifications/${id}/resolve`)).data;
+export const reportSobrante = async (stops) => (await client.post("/my/notifications/sobrante", { stops })).data;
 export const addSingleStop = async (cid, body) => (await client.post(`/route-configs/${cid}/add-stop`, body)).data;
 
 // ---- Route Configs (Configuración de rutas) ----

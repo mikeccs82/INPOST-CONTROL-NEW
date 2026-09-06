@@ -247,3 +247,10 @@
 - Frontend DriverApp (Ordenar Ruta): selector "route-first-stop" en el toolbar con las paradas actuales; optimize() pasa firstStopId a buildMyRoute(firstStopId).
 - Verificado por API (normal=BAZAR INFORMATICA; con first_stop=ESTANCO 271 queda 1ª, 6 paradas, sin duplicados) y UI (selector presente, salida/retorno nave, horarios).
 - NOTA: la asignación del conductor 1111 era del 2026-09-05; el entorno pasó a 2026-09-06, por eso para probar hoy hay que reasignar en Asignación de Ruta. Sigue PENDIENTE: Fases 2-4 del control de sobrantes (nave por defecto, notificación admin, otra ruta quita solo las recogidas sin entrega, carry-over obligatorio día siguiente primeras/bloqueadas).
+
+## Fase 2 - Sobrante de carga -> notificación al admin (2026-09-06)
+- Al cerrar la Carga (CargaLista.proceed), además de marcar no-cargadas como pickup_only (ya iban al final), se calcula el SOBRANTE = paradas loadable NO cargadas (excluye las pickup manuales) y se reporta vía POST /api/my/notifications/sobrante {stops:[{stop_id,name,address,sacas}]}.
+- Backend crea/actualiza (upsert por type=sobrante_carga+driver+route+date) una notificación con stops[] y decision (por DEFECTO "nave"). Si stops vacío, borra la notificación. type_label "Sobrante de carga (no entró)".
+- Admin (Notificaciones): las filas sobrante_carga muestran nº de paradas y un badge de decisión ("En nave"/"Otra ruta") en la última columna (read-only en Fase 2). Las de parada_no_registrada siguen con botón Corregir.
+- Verificado por curl (crea notif decision=nave, unread=1; vaciar la borra) y UI (dashboard + Notificaciones renderizan).
+- PENDIENTE Fase 3: botones nave/otra_ruta reversibles en el admin y su efecto (otra_ruta quita solo las recogidas sin entrega al 1º). Fase 4: carry-over obligatorio día siguiente (primeras/bloqueadas).

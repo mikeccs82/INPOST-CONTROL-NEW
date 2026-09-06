@@ -1928,7 +1928,46 @@ class AddStopBody(BaseModel):
     lon: Optional[float] = None
 
 
-NOTIF_LABELS = {"parada_no_registrada": "Parada no registrada"}
+NOTIF_LABELS = {"parada_no_registrada": "Parada no registrada", "sobrante_carga": "Sobrante de carga (no entró)"}
+
+
+class SobranteStop(BaseModel):
+    stop_id: str
+    name: Optional[str] = None
+    address: Optional[str] = None
+    sacas: int = 0
+
+
+class SobranteBody(BaseModel):
+    stops: List[SobranteStop] = []
+
+
+@api_router.post("/my/notifications/sobrante")
+async def report_sobrante(body: SobranteBody, user=Depends(get_current_user)):
+    """Reporta las paradas que NO entraron en la carga (sobrante). Crea/actualiza una
+    notificación por conductor+ruta+día. Por defecto la decisión es 'nave'."""
+    rc = await _my_config(user, _today())
+    if not rc:
+        raise HTTPException(404, "No tienes ruta asignada")
+    d = _today()
+    key = {"type": "sobrante_carga", "driver_id": user["id"], "route_config_id": rc["id"], "date": d}
+    if not body.stops:
+        await db.notifications.delete_many(key)
+        return {"ok": True, "count": 0}
+    existing = await db.notifications.find_one(key, {"_id": 0, "id": 1, "decision": 1})
+    doc = {
+        **key,
+        "id": existing["id"] if existing else str(uuid.uuid4()),
+        "route_number": rc.get("number") or "",
+        "delegacion": rc.get("delegacion"),
+        "driver_name": f"{user.get('nombres','')} {user.get('apellidos','')}".strip() or user.get("username"),
+        "stops": [s.model_dump() for s in body.stops],
+        "decision": (existing.get("decision") if existing else "nave") or "nave",
+        "status": "unread",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.update_one(key, {"$set": doc}, upsert=True)
+    return {"ok": True, "count": len(body.stops), "decision": doc["decision"]}
 
 
 @api_router.post("/my/notifications")

@@ -130,7 +130,11 @@ export const Notificaciones = () => {
                   <td className="px-3 py-2.5 text-slate-200">
                     <div className="flex items-center gap-2">
                       <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                      <span>{n.type_label}{n.last4 ? <span className="text-slate-500 font-mono-tech"> · ···{n.last4}</span> : null}</span>
+                      <span>{n.type_label}
+                        {n.type === "sobrante_carga"
+                          ? <span className="text-slate-500"> · {(n.stops || []).length} parada(s)</span>
+                          : (n.last4 ? <span className="text-slate-500 font-mono-tech"> · ···{n.last4}</span> : null)}
+                      </span>
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-slate-300 whitespace-nowrap">{n.driver_name || "—"}</td>
@@ -138,7 +142,11 @@ export const Notificaciones = () => {
                     <span className={`inline-block text-[11px] font-bold px-2 py-1 rounded-full border ${STATUS_STYLE[n.status] || STATUS_STYLE.read}`}>{STATUS_LABEL[n.status] || n.status}</span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    {n.status === "resolved" ? (
+                    {n.type === "sobrante_carga" ? (
+                      <span data-testid={`notif-decision-${n.id}`} className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full border ${n.decision === "otra_ruta" ? "bg-[#1E5AA8]/15 text-sky-300 border-sky-500/40" : "bg-amber-500/15 text-amber-300 border-amber-500/40"}`}>
+                        {n.decision === "otra_ruta" ? "Otra ruta" : "En nave"}
+                      </span>
+                    ) : n.status === "resolved" ? (
                       <span className="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold"><CheckCircle2 size={14} /> Corregida</span>
                     ) : (
                       <button data-testid={`notif-fix-${n.id}`} onClick={() => setConfirm(n)}
