@@ -2025,6 +2025,47 @@ async def resolve_notification(nid: str, admin=Depends(require_admin)):
     return {"ok": True}
 
 
+class DecisionBody(BaseModel):
+    decision: str = "nave"
+
+
+@api_router.put("/notifications/{nid}/decision")
+async def set_sobrante_decision(nid: str, body: DecisionBody, admin=Depends(require_admin)):
+    """Decide el destino del sobrante: 'nave' (el 1er conductor hace solo recogida) u
+    'otra_ruta' (se le quitan al 1er conductor SOLO esas recogidas sin entrega)."""
+    if body.decision not in ("nave", "otra_ruta"):
+        raise HTTPException(400, "Decisión no válida")
+    n = await db.notifications.find_one({"id": nid, "type": "sobrante_carga"}, {"_id": 0})
+    if not n:
+        raise HTTPException(404, "Notificación no encontrada")
+    stop_ids = {s["stop_id"] for s in n.get("stops", [])}
+    day = await db.route_day_sessions.find_one({"driver_id": n["driver_id"], "date": n["date"]}, {"_id": 0})
+    if day and day.get("driver_route"):
+        dr = day["driver_route"]
+        stops = dr.get("stops", [])
+        if body.decision == "otra_ruta":
+            # Quitar del 1er conductor SOLO esas paradas que son solo recogida (sin entrega).
+            stops = [s for s in stops if not (s.get("id") in stop_ids and s.get("pickup_only"))]
+        else:
+            # Volver a "nave": reponer las paradas como solo recogida al final si no están.
+            present = {s.get("id") for s in stops}
+            rc = await db.route_configs.find_one({"id": n["route_config_id"]}, {"_id": 0})
+            by_id = {s["id"]: s for s in (rc.get("stops", []) if rc else [])}
+            for sid in stop_ids:
+                if sid not in present and sid in by_id:
+                    stops.append({**by_id[sid], "pickup_only": True})
+        dr["stops"] = stops
+        dr["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.route_day_sessions.update_one(
+            {"driver_id": n["driver_id"], "date": n["date"]},
+            {"$set": {"driver_route": dr, "updated_at": dr["updated_at"]}},
+        )
+    await db.notifications.update_one({"id": nid}, {"$set": {"decision": body.decision, "status": "read"}})
+    return {"ok": True, "decision": body.decision}
+
+
+
+
 @api_router.post("/route-configs/{cid}/add-stop")
 async def add_single_stop(cid: str, body: AddStopBody, admin=Depends(require_admin)):
     rc = await db.route_configs.find_one({"id": cid}, {"_id": 0})

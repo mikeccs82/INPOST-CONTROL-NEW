@@ -254,3 +254,11 @@
 - Admin (Notificaciones): las filas sobrante_carga muestran nº de paradas y un badge de decisión ("En nave"/"Otra ruta") en la última columna (read-only en Fase 2). Las de parada_no_registrada siguen con botón Corregir.
 - Verificado por curl (crea notif decision=nave, unread=1; vaciar la borra) y UI (dashboard + Notificaciones renderizan).
 - PENDIENTE Fase 3: botones nave/otra_ruta reversibles en el admin y su efecto (otra_ruta quita solo las recogidas sin entrega al 1º). Fase 4: carry-over obligatorio día siguiente (primeras/bloqueadas).
+
+## Fase 3 - Decisión del admin sobre el sobrante (2026-09-06)
+- PUT /api/notifications/{nid}/decision {decision:"nave"|"otra_ruta"} (admin). Efecto sobre route_day_sessions del conductor+fecha de la notif:
+  - otra_ruta: quita del driver_route SOLO las paradas del sobrante que son pickup_only (solo recogida, sin entrega). Quedan disponibles para el 2º conductor de la misma ruta (vía su Ordenar Sacas).
+  - nave (revertir): repone esas paradas como pickup_only al final (tomando el stop del route_config).
+- Frontend Notificaciones: botones toggle "En nave"/"Otra ruta" por fila de sobrante (setSobranteDecision), reversibles, con estado resaltado.
+- Verificado por API (5 stops/2 pickup -> otra_ruta 3/0 -> nave 5/2) y UI (toggle + toast).
+- PENDIENTE Fase 4: carry-over obligatorio día siguiente (las que quedaron en nave salen primeras y bloqueadas para quien tenga la ruta).

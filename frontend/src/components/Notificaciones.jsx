@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, Bell, X, MapPin, CheckCircle2, Plus, AlertTriangle } from "lucide-react";
-import { listNotifications, markNotificationsRead, resolveNotification, addSingleStop } from "../lib/api";
+import { listNotifications, markNotificationsRead, resolveNotification, addSingleStop, setSobranteDecision } from "../lib/api";
 
 const STATUS_LABEL = { unread: "Nueva", read: "Vista", resolved: "Corregida" };
 const STATUS_STYLE = {
@@ -90,6 +90,19 @@ export const Notificaciones = () => {
   const [items, setItems] = useState([]);
   const [confirm, setConfirm] = useState(null); // notif pending confirm
   const [addFor, setAddFor] = useState(null); // notif for add-stop modal
+  const [deciding, setDeciding] = useState(null);
+
+  const decide = async (n, decision) => {
+    if (n.decision === decision) return;
+    setDeciding(n.id);
+    try {
+      await setSobranteDecision(n.id, decision);
+      toast.success(decision === "otra_ruta" ? "Pasado a otra ruta (recogidas quitadas al conductor)" : "Se queda en nave");
+      load();
+    } catch (e) {
+      toast.error("No se pudo actualizar la decisión");
+    } finally { setDeciding(null); }
+  };
 
   const load = useCallback((markRead = false) => {
     setLoading(true);
@@ -143,9 +156,16 @@ export const Notificaciones = () => {
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     {n.type === "sobrante_carga" ? (
-                      <span data-testid={`notif-decision-${n.id}`} className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full border ${n.decision === "otra_ruta" ? "bg-[#1E5AA8]/15 text-sky-300 border-sky-500/40" : "bg-amber-500/15 text-amber-300 border-amber-500/40"}`}>
-                        {n.decision === "otra_ruta" ? "Otra ruta" : "En nave"}
-                      </span>
+                      <div data-testid={`notif-decision-${n.id}`} className="inline-flex items-center gap-1 rounded-lg border border-slate-600 overflow-hidden">
+                        <button data-testid={`notif-nave-${n.id}`} onClick={() => decide(n, "nave")} disabled={deciding === n.id}
+                          className={`text-[11px] font-bold px-2.5 py-1.5 transition-colors ${n.decision !== "otra_ruta" ? "bg-amber-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+                          En nave
+                        </button>
+                        <button data-testid={`notif-otraruta-${n.id}`} onClick={() => decide(n, "otra_ruta")} disabled={deciding === n.id}
+                          className={`text-[11px] font-bold px-2.5 py-1.5 transition-colors ${n.decision === "otra_ruta" ? "bg-[#1E5AA8] text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+                          Otra ruta
+                        </button>
+                      </div>
                     ) : n.status === "resolved" ? (
                       <span className="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold"><CheckCircle2 size={14} /> Corregida</span>
                     ) : (
