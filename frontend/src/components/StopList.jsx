@@ -64,7 +64,10 @@ export const StopList = ({ stops, onReorder, onRemove, selectedId, onSelect, onC
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-white truncate" title={s.name}>{s.name || "Parada"}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm font-semibold text-white truncate" title={s.name}>{s.name || "Parada"}</div>
+                          {s.pendiente && <span data-testid={`stop-pendiente-${index}`} className="shrink-0 text-[9px] font-bold uppercase bg-red-600 text-white rounded px-1.5 py-0.5">Pendiente ayer</span>}
+                        </div>
                         {s.address && <div className="text-xs text-slate-400 truncate" title={s.address}>{s.address}</div>}
                         <div className="flex items-center gap-3 mt-1">
                           {!readOnlyMeta && (

@@ -1127,6 +1127,31 @@ async def _my_config(user, d=None):
     return await db.route_configs.find_one({"id": entry["route_config_id"]}, {"_id": 0})
 
 
+async def _pending_nave_stops(route_config_id, today, rc=None):
+    """Paradas que quedaron en nave días anteriores (decisión 'nave', sin entregar) para esta ruta.
+    Deben salir de PRIMERAS y bloqueadas al día siguiente para quien tenga la ruta."""
+    notifs = await db.notifications.find(
+        {"type": "sobrante_carga", "route_config_id": route_config_id, "decision": "nave",
+         "status": {"$ne": "entregado"}, "date": {"$lt": today}},
+        {"_id": 0},
+    ).to_list(200)
+    if not notifs:
+        return []
+    rc = rc or await db.route_configs.find_one({"id": route_config_id}, {"_id": 0})
+    by_id = {s["id"]: s for s in (rc.get("stops", []) if rc else [])}
+    seen, out = set(), []
+    for n in notifs:
+        for s in n.get("stops", []):
+            sid = s.get("stop_id")
+            if sid and sid not in seen and sid in by_id:
+                st = by_id[sid]
+                if st.get("lat") is not None and st.get("lon") is not None:
+                    seen.add(sid)
+                    out.append({**st, "pendiente": True, "pickup_only": False})
+    return out
+
+
+
 async def _editable(uid, d):
     """Un conductor solo puede operar (editar) HOY si tiene ruta asignada en el Diario de hoy."""
     if d != _today():
@@ -1410,6 +1435,11 @@ async def build_my_route(first_stop_id: Optional[str] = None, user=Depends(get_c
         chosen = next((s for s in ordered if s.get("id") == first_stop_id), None)
         if chosen:
             ordered = [chosen] + [s for s in ordered if s.get("id") != first_stop_id]
+    # Fase 4: los pendientes de nave de días anteriores van de PRIMERAS y bloqueados.
+    pend = await _pending_nave_stops(rc["id"], _today(), rc)
+    if pend:
+        pend_ids = {s["id"] for s in pend}
+        ordered = pend + [s for s in ordered if s.get("id") not in pend_ids]
     driver_route = {
         "stops": ordered,
         "start": start,
@@ -1525,6 +1555,18 @@ async def save_my_reparto(body: RepartoBody, user=Depends(get_current_user)):
         }},
         upsert=True,
     )
+    # Auto-resolución Fase 4: si se entregaron todas las paradas de un pendiente de nave, se cierra.
+    if rc:
+        delivered = {sid for sid, v in (body.stops or {}).items() if isinstance(v, dict) and v.get("delivered")}
+        if delivered:
+            pend_notifs = await db.notifications.find(
+                {"type": "sobrante_carga", "route_config_id": rc.get("id"), "decision": "nave",
+                 "status": {"$ne": "entregado"}, "date": {"$lt": d}}, {"_id": 0},
+            ).to_list(200)
+            for n in pend_notifs:
+                sids = {s.get("stop_id") for s in n.get("stops", [])}
+                if sids and sids.issubset(delivered):
+                    await db.notifications.update_one({"id": n["id"]}, {"$set": {"status": "entregado"}})
     return {"ok": True}
 
 

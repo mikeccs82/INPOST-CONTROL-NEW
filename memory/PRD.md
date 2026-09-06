@@ -262,3 +262,11 @@
 - Frontend Notificaciones: botones toggle "En nave"/"Otra ruta" por fila de sobrante (setSobranteDecision), reversibles, con estado resaltado.
 - Verificado por API (5 stops/2 pickup -> otra_ruta 3/0 -> nave 5/2) y UI (toggle + toast).
 - PENDIENTE Fase 4: carry-over obligatorio día siguiente (las que quedaron en nave salen primeras y bloqueadas para quien tenga la ruta).
+
+## Fase 4 - Carry-over obligatorio del pendiente de nave (2026-09-06)
+- Helper _pending_nave_stops(route_config_id, today): junta paradas de notifs sobrante_carga con decision='nave', status!='entregado', date<today, para esa ruta (toma el stop completo del route_config, con lat/lon), marcadas {pendiente:True, pickup_only:False}.
+- build_my_route: inyecta esos pendientes de PRIMERAS (antes que la 1ª parada elegida y el resto optimizado), deduplicados. Van para quien tenga la ruta ese día (se resuelve por route_config_id, no por conductor).
+- save_my_reparto: auto-resolución -> si todas las paradas de un pendiente de nave se marcan delivered, la notif pasa a status 'entregado' y deja de arrastrarse.
+- Frontend StopList: badge rojo "PENDIENTE AYER" (data-testid stop-pendiente-{index}) en esas paradas.
+- Verificado API (build pone 2 pendientes primero; entregar los 2 -> status entregado; rebuild 0 pendientes) y UI (badges rojos en 1ª y 2ª parada).
+- COMPLETO el control de sobrantes (Fases 1-4).
