@@ -1362,7 +1362,7 @@ async def my_route_config(date: Optional[str] = None, user=Depends(get_current_u
 
 
 @api_router.post("/my/route/build")
-async def build_my_route(user=Depends(get_current_user)):
+async def build_my_route(first_stop_id: Optional[str] = None, user=Depends(get_current_user)):
     rc = await _my_config(user, _today())
     if not rc:
         raise HTTPException(404, "No tienes ruta asignada")
@@ -1405,6 +1405,11 @@ async def build_my_route(user=Depends(get_current_user)):
     )
     res = await optimize(req)
     ordered = [stops_by_id[i] for i in res["order"] if i in stops_by_id]
+    # Plus opcional: si el conductor eligió una primera parada, se ancla al inicio.
+    if first_stop_id:
+        chosen = next((s for s in ordered if s.get("id") == first_stop_id), None)
+        if chosen:
+            ordered = [chosen] + [s for s in ordered if s.get("id") != first_stop_id]
     driver_route = {
         "stops": ordered,
         "start": start,

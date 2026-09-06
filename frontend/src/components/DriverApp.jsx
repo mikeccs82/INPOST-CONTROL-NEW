@@ -72,6 +72,7 @@ export const DriverApp = ({ user, onLogout }) => {
   };
 
   const [building, setBuilding] = useState(false);
+  const [firstStopId, setFirstStopId] = useState("");
   const [preCargaOpen, setPreCargaOpen] = useState(false);
   const [preCargaSaving, setPreCargaSaving] = useState(false);
 
@@ -98,9 +99,9 @@ export const DriverApp = ({ user, onLogout }) => {
     if (!rEditable) { toast.error("Los días anteriores son solo lectura"); return; }
     setBuilding(true);
     try {
-      await buildMyRoute();
+      await buildMyRoute(firstStopId || undefined);
       await load();
-      toast.success("Ruta optimizada");
+      toast.success(firstStopId ? "Ruta optimizada desde tu primera parada" : "Ruta optimizada");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "No se pudo optimizar. ¿Ordenaste sacas?");
     } finally { setBuilding(false); }
@@ -171,6 +172,14 @@ export const DriverApp = ({ user, onLogout }) => {
             {summary && <span className="text-[11px] font-mono-tech text-slate-300">{fmtDistance(summary.distance)} · {fmtDuration(summary.duration)}</span>}
             {rEditable && (
               <div className="ml-auto flex items-center gap-1.5">
+                {stops.length > 0 && (
+                  <select data-testid="route-first-stop" value={firstStopId} onChange={(e) => setFirstStopId(e.target.value)}
+                    title="Elegir primera parada (opcional)"
+                    className="text-[11px] bg-slate-800 border border-slate-600 text-white rounded-md px-2 py-1.5 outline-none focus:border-[#F26A21] max-w-[150px]">
+                    <option value="">1ª parada: automática</option>
+                    {stops.map((s) => <option key={s.id} value={s.id}>1ª: {s.name || s.order_id || "parada"}</option>)}
+                  </select>
+                )}
                 <button data-testid="route-repeat-last" onClick={repeatLast} disabled={building}
                   className="flex items-center gap-1.5 bg-slate-800 border border-slate-600 hover:border-[#F26A21] text-white text-xs font-bold px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50">
                   <RotateCcw size={13} /> Repetir último día

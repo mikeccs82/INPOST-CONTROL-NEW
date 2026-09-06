@@ -241,3 +241,9 @@
 - Al Continuar: las marcadas "Añadido" se añaden a driver_route con pickup_only:true y added_manual:true (vía saveDriverRouteOrder) y se pasa a Carga (Paso 3). Aparecen en Paso 4 como puntos verdes de SOLO RECOGIDA, en la misma sección que las de sobra por capacidad.
 - CargaLista: las paradas con pickup_only===true (preajustadas) NO entran en el checklist de carga (no se pueden cargar), se muestran en bloque "Solo recogida añadidas" y se conservan como pickup_only al finalizar. Las paradas con sacas ordenadas siguen su flujo normal (no se pueden quitar).
 - Verificado en UI (aviso -> lista 32 sin escanear -> toggle Añadido -> Continuar -> Carga) y API (driver_route con 2 pickup_only added_manual).
+
+## Fase 1 - Elegir primera parada (opcional) + anclaje en optimizador (2026-09-06)
+- build_my_route acepta query param opcional first_stop_id: tras optimizar, si el conductor eligió una primera parada, se ancla al inicio (chosen + resto en orden optimizado, sin duplicar). Es OPCIONAL (un plus); por defecto "1ª parada: automática".
+- Frontend DriverApp (Ordenar Ruta): selector "route-first-stop" en el toolbar con las paradas actuales; optimize() pasa firstStopId a buildMyRoute(firstStopId).
+- Verificado por API (normal=BAZAR INFORMATICA; con first_stop=ESTANCO 271 queda 1ª, 6 paradas, sin duplicados) y UI (selector presente, salida/retorno nave, horarios).
+- NOTA: la asignación del conductor 1111 era del 2026-09-05; el entorno pasó a 2026-09-06, por eso para probar hoy hay que reasignar en Asignación de Ruta. Sigue PENDIENTE: Fases 2-4 del control de sobrantes (nave por defecto, notificación admin, otra ruta quita solo las recogidas sin entrega, carry-over obligatorio día siguiente primeras/bloqueadas).
